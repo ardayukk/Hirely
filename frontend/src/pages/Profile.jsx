@@ -10,8 +10,8 @@ import {
   Typography,
   Fade,
 } from "@mui/material";
-import colors from "../../helper/colors";
-import { axiosInstance } from "../context/AuthContext";
+import colors from "../helper/colors";
+import { axiosInstance } from "../context/Authcontext.jsx";
 import { getCookie } from "../context/_helpers";
 
 export default function Profile() {
