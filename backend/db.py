@@ -1,0 +1,27 @@
+import os
+from typing import Any
+from contextlib import asynccontextmanager
+
+import psycopg
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Support Django-style discrete DB_* env vars by constructing a DATABASE_URL if absent
+if not DATABASE_URL:
+    db_name = os.getenv("DB_NAME")
+    db_user = os.getenv("DB_USER")
+    db_pass = os.getenv("DB_PASSWORD")
+    db_host = os.getenv("DB_HOST", "localhost")
+    db_port = os.getenv("DB_PORT", "5432")
+    if all([db_name, db_user, db_pass]):
+        DATABASE_URL = f"postgresql+psycopg://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
+
+@asynccontextmanager
+async def get_connection() -> Any:
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL is not set")
+    async with await psycopg.AsyncConnection.connect(DATABASE_URL) as conn:
+        yield conn
