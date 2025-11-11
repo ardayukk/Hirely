@@ -4,7 +4,7 @@ import { AppBar, Button, Container, IconButton, Toolbar } from '@mui/material';
 import { useContext } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/Authcontext'; // ✅ import your Auth hook (fixed relative path & filename case)
-import Admin from '../pages/Admin';
+import { MockApiProvider } from '../context/MockApiProvider';
 import Home from '../pages/Home';
 import Login from '../pages/Login';
 import Profile from '../pages/Profile';
@@ -39,10 +39,10 @@ function AppContent() {
                     <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
                         <Button component={Link} to="/home" variant="text">Artifact Comparator</Button>
                         <Button component={Link} to="/seller" variant="text">Seller</Button>
-                        <Button component={Link} to="/admin" variant="text">Admin</Button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Button onClick={handleLogout}>Logout</Button>
                             <Button component={Link} to="/seller">Seller</Button>
+                            <Button component={Link} to="/client">Client</Button>
                             <Button component={Link} to="/admin">Admin</Button>
                             <Button component={Link} to="/profile">Profile</Button>
                             <ThemeToggle />
@@ -56,6 +56,13 @@ function AppContent() {
                 <Route path="/login" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Login /></div>} />
                 <Route path="/register" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Register /></div>} />
                 <Route path="/seller" element={<Seller />} />
+                <Route path="/client" element={<ClientWorkspace />} />
+                <Route path="/checkout/:gigId" element={<Checkout />} />
+                <Route path="/orders" element={<Orders />} />
+                <Route path="/orders/:orderId" element={<OrderDetail />} />
+                <Route path="/inbox" element={<Inbox />} />
+                <Route path="/inbox/:conversationId" element={<OrderDetail />} />
+                <Route path="/logout" element={<Logout />} />
                 <Route path="/admin" element={<Admin />} />
 
                 {/* Protected routes */}
@@ -65,6 +72,7 @@ function AppContent() {
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />
             </Routes>
+        </MockApiProvider >
         </>
     );
 }
