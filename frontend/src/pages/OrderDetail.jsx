@@ -32,8 +32,37 @@ export default function OrderDetail(){
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6">Timeline</Typography>
-        <Typography variant="body2" color="text.secondary">(Timeline events would appear here)</Typography>
+        <Box sx={{ mt: 1 }}>
+          {order.timeline && order.timeline.map(ev => (
+            <Box key={ev.id} sx={{ mb: 1 }}>
+              <Typography variant="subtitle2">{ev.type.replace('_',' ')}</Typography>
+              <Typography variant="body2" color="text.secondary">{ev.data?.note}</Typography>
+              <Typography variant="caption" color="text.secondary">{new Date(ev.time).toLocaleString()}</Typography>
+            </Box>
+          ))}
+        </Box>
         <Button sx={{ mt: 1 }} onClick={()=>alert('Request Revision (mock)')}>Request Revision</Button>
+      </Paper>
+
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Typography variant="h6">Deliverables</Typography>
+        <Box sx={{ mt: 1 }}>
+          {order.deliveries && order.deliveries.length > 0 ? (
+            order.deliveries.map(d => (
+              <Box key={d.id} sx={{ mb: 2 }}>
+                <Typography variant="subtitle2">Delivered at {new Date(d.at).toLocaleString()}</Typography>
+                <Typography variant="body2">{d.message}</Typography>
+                {d.files && d.files.map(f => (
+                  <Box key={f.name} sx={{ mt: 1 }}>
+                    <Button size="small" onClick={() => alert('Download ' + f.name)}>{f.name}</Button>
+                  </Box>
+                ))}
+              </Box>
+            ))
+          ) : (
+            <Typography color="text.secondary">No deliverables yet.</Typography>
+          )}
+        </Box>
       </Paper>
 
       <Paper sx={{ p: 2, mb: 2 }}>

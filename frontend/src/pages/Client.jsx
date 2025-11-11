@@ -1,11 +1,20 @@
-import React, { useState } from 'react';
-import { AppBar, Tabs, Tab, Container, Box, Typography, Avatar, Stack } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { AppBar, Tabs, Tab, Container, Box, Typography, Avatar, Stack, Badge, Chip } from '@mui/material';
 import Checkout from './Checkout';
 import Orders from './Orders';
 import Inbox from './Inbox';
+import Payments from './Payments';
+import { useMockApi } from '../context/MockApiProvider';
 
 export default function ClientWorkspace() {
   const [tab, setTab] = useState(0);
+  const [stats, setStats] = useState({ activeOrders: 0, unreadMessages: 0, pendingPayments: 0 });
+  const { getDashboardStats, getProfile } = useMockApi();
+
+  useEffect(() => {
+    getDashboardStats().then(s => setStats(s));
+    getProfile().then(p => {/* could show profile */});
+  }, []);
 
   return (
     <>
@@ -17,6 +26,8 @@ export default function ClientWorkspace() {
           </Stack>
 
           <Stack direction="row" spacing={1} alignItems="center">
+            <Chip label={`Orders: ${stats.activeOrders}`} size="small" />
+            <Chip label={`Unread: ${stats.unreadMessages}`} size="small" color={stats.unreadMessages ? 'warning' : 'default'} />
             <Avatar alt="You" />
             <Typography variant="body2" color="text.secondary">Client</Typography>
           </Stack>
@@ -25,9 +36,9 @@ export default function ClientWorkspace() {
           <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mt: 1 }}>
             <Tab label="Dashboard" />
             <Tab label="Checkout" />
-            <Tab label="My Orders" />
-            <Tab label="Inbox" />
-            <Tab label="Payments" />
+            <Tab label={`My Orders (${stats.activeOrders})`} />
+            <Tab label={<Badge color="warning" badgeContent={stats.unreadMessages}>Inbox</Badge>} />
+            <Tab label={`Payments (${stats.pendingPayments})`} />
             <Tab label="Settings" />
           </Tabs>
         </Container>
@@ -43,12 +54,7 @@ export default function ClientWorkspace() {
         {tab === 1 && <Checkout />}
         {tab === 2 && <Orders />}
         {tab === 3 && <Inbox />}
-        {tab === 4 && (
-          <Box>
-            <Typography variant="h6">Payments</Typography>
-            <Typography color="text.secondary">(Mock) View charges and invoices here.</Typography>
-          </Box>
-        )}
+        {tab === 4 && <Payments />}
         {tab === 5 && (
           <Box>
             <Typography variant="h6">Settings</Typography>

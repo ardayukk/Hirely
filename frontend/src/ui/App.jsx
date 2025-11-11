@@ -15,6 +15,7 @@ import Orders from '../pages/Orders';
 import OrderDetail from '../pages/OrderDetail';
 import Inbox from '../pages/Inbox';
 import Logout from '../pages/Logout';
+import Payments from '../pages/Payments';
 import { ThemeModeContext } from './main';
 import { MockApiProvider } from '../context/MockApiProvider';
 
@@ -70,6 +71,7 @@ function AppContent() {
                 <Route path="/inbox" element={<Inbox />} />
                 <Route path="/inbox/:conversationId" element={<OrderDetail />} />
                 <Route path="/logout" element={<Logout />} />
+                <Route path="/payments" element={<Payments />} />
 
                 {/* Protected routes */}
                 <Route path="/home" element={user ? <Container sx={{ mt: 4 }}><Home /></Container> : <Navigate to="/login" replace />} />

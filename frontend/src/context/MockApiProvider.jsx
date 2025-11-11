@@ -1,11 +1,14 @@
 import React, { createContext, useContext, useState } from 'react';
-import { sampleOrders, sampleMessages } from '../mocks/mockData';
+import { sampleOrders, sampleMessages, sampleConversations, samplePayments, sampleProfile, sampleDashboard } from '../mocks/mockData';
 
 const MockApiContext = createContext(null);
 
 export function MockApiProvider({ children }) {
   const [orders, setOrders] = useState(sampleOrders);
   const [messages, setMessages] = useState(sampleMessages);
+  const [conversations, setConversations] = useState(sampleConversations);
+  const [payments, setPayments] = useState(samplePayments);
+  const [profile, setProfile] = useState(sampleProfile);
 
   function listOrders() {
     return Promise.resolve(orders);
@@ -42,8 +45,47 @@ export function MockApiProvider({ children }) {
     return Promise.resolve(msg);
   }
 
+  function listConversations() {
+    return Promise.resolve(conversations);
+  }
+
+  function getConversation(id) {
+    const c = conversations.find((x) => x.id === id);
+    return Promise.resolve(c || null);
+  }
+
+  function listPayments() {
+    return Promise.resolve(payments);
+  }
+
+  function getProfile() {
+    return Promise.resolve(profile);
+  }
+
+  function updateProfile(patch) {
+    const updated = { ...profile, ...patch };
+    setProfile(updated);
+    return Promise.resolve(updated);
+  }
+
+  function getDashboardStats() {
+    return Promise.resolve(sampleDashboard);
+  }
+
   return (
-    <MockApiContext.Provider value={{ listOrders, getOrder, createOrder, listMessages, sendMessage }}>
+    <MockApiContext.Provider value={{
+      listOrders,
+      getOrder,
+      createOrder,
+      listMessages,
+      sendMessage,
+      listConversations,
+      getConversation,
+      listPayments,
+      getProfile,
+      updateProfile,
+      getDashboardStats,
+    }}>
       {children}
     </MockApiContext.Provider>
   );

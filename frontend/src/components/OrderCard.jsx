@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, CardContent, Typography, Box, Button, Avatar } from '@mui/material';
+import { Card, CardContent, Typography, Box, Button, Avatar, Chip } from '@mui/material';
 
 export default function OrderCard({ order, onView, onMessage }) {
   return (
@@ -9,6 +9,10 @@ export default function OrderCard({ order, onView, onMessage }) {
         <Box sx={{ flex: 1 }}>
           <Typography variant="h6">{order.title}</Typography>
           <Typography variant="body2" color="text.secondary">{order.seller.name} · {order.tier.name} · {order.price.total} {order.price.currency}</Typography>
+          <Box sx={{ mt: 1 }}>
+            <Chip label={order.status} size="small" sx={{ mr: 1 }} />
+            {order.dueDate && <Typography component="span" variant="caption" color="text.secondary">Due {new Date(order.dueDate).toLocaleDateString()}</Typography>}
+          </Box>
         </Box>
         <Box>
           <Button size="small" onClick={() => onMessage && onMessage(order)}>Message</Button>

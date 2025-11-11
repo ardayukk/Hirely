@@ -10,6 +10,12 @@ export const sampleOrders = [
     updatedAt: '2025-11-12T10:00:00Z',
     revisionsAllowed: 2,
     revisionsRemaining: 2,
+    timeline: [
+      { id: 'ev1', type: 'order_created', actor: 'buyer', time: '2025-11-11T09:00:00Z', data: { note: 'Order placed' } },
+      { id: 'ev2', type: 'payment', actor: 'system', time: '2025-11-11T09:01:00Z', data: { note: 'Payment received' } },
+      { id: 'ev3', type: 'work_started', actor: 'seller', time: '2025-11-12T10:00:00Z', data: { note: 'Seller started work' } },
+    ],
+    deliveries: [],
   },
   {
     id: 'ord_2',
@@ -22,6 +28,14 @@ export const sampleOrders = [
     updatedAt: '2025-11-13T12:00:00Z',
     revisionsAllowed: 1,
     revisionsRemaining: 1,
+    timeline: [
+      { id: 'ev1', type: 'order_created', actor: 'buyer', time: '2025-11-10T09:00:00Z', data: { note: 'Order placed' } },
+      { id: 'ev2', type: 'payment', actor: 'system', time: '2025-11-10T09:01:00Z', data: { note: 'Payment received' } },
+      { id: 'ev3', type: 'delivery', actor: 'seller', time: '2025-11-13T11:00:00Z', data: { note: 'Initial delivery', files: [{ id: 'f1', name: 'final.zip', url: '#' }] } },
+    ],
+    deliveries: [
+      { id: 'd1', at: '2025-11-13T11:00:00Z', message: 'Initial delivery', files: [{ name: 'final.zip', url: '#' }] },
+    ],
   },
 ];
 
@@ -33,4 +47,51 @@ export const sampleMessages = {
   ord_2: [
     { id: 'm3', sender: 'seller', text: 'Delivery uploaded', createdAt: '2025-11-13T11:00:00Z' },
   ],
+};
+
+export const sampleConversations = [
+  {
+    id: 'c_ord_1',
+    orderId: 'ord_1',
+    partner: { id: 'u2', name: 'Jane Doe' },
+    lastMessage: 'Thanks — please use blue tones',
+    updatedAt: '2025-11-12T10:05:00Z',
+    unread: 1,
+  },
+  {
+    id: 'c_ord_2',
+    orderId: 'ord_2',
+    partner: { id: 'u3', name: 'Acme Devs' },
+    lastMessage: 'Delivery uploaded',
+    updatedAt: '2025-11-13T11:00:00Z',
+    unread: 0,
+  },
+];
+
+export const samplePayments = [
+  { id: 'pay_1', type: 'charge', amount: 155, currency: 'USD', date: '2025-11-11T09:00:00Z', orderId: 'ord_1', status: 'succeeded' },
+  { id: 'pay_2', type: 'charge', amount: 620, currency: 'USD', date: '2025-11-13T12:00:00Z', orderId: 'ord_2', status: 'succeeded' },
+  { id: 'pay_3', type: 'refund', amount: 50, currency: 'USD', date: '2025-11-14T08:00:00Z', orderId: null, status: 'issued' },
+];
+
+export const sampleProfile = {
+  id: 'u1',
+  displayName: 'Demo Client',
+  email: 'demo@local',
+  location: 'Istanbul, TR',
+  notifications: {
+    orders: true,
+    messages: true,
+    promotions: false,
+  },
+  security: {
+    twoFactor: false,
+  },
+};
+
+export const sampleDashboard = {
+  activeOrders: 2,
+  unreadMessages: 1,
+  pendingPayments: 0,
+  completedThisMonth: 3,
 };
