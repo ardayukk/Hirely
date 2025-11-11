@@ -5,8 +5,15 @@ import { useContext } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/Authcontext'; // ✅ import your Auth hook (fixed relative path & filename case)
 import { MockApiProvider } from '../context/MockApiProvider';
+import Admin from '../pages/Admin';
+import Checkout from '../pages/Checkout';
+import ClientWorkspace from '../pages/Client';
 import Home from '../pages/Home';
+import Inbox from '../pages/Inbox';
 import Login from '../pages/Login';
+import Logout from '../pages/Logout';
+import OrderDetail from '../pages/OrderDetail';
+import Orders from '../pages/Orders';
 import Profile from '../pages/Profile';
 import Register from '../pages/Register';
 import Seller from '../pages/Seller';
@@ -51,28 +58,29 @@ function AppContent() {
                 </AppBar>
             )}
 
-            <Routes>
-                <Route path="/" element={<Navigate to="/login" replace />} />
-                <Route path="/login" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Login /></div>} />
-                <Route path="/register" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Register /></div>} />
-                <Route path="/seller" element={<Seller />} />
-                <Route path="/client" element={<ClientWorkspace />} />
-                <Route path="/checkout/:gigId" element={<Checkout />} />
-                <Route path="/orders" element={<Orders />} />
-                <Route path="/orders/:orderId" element={<OrderDetail />} />
-                <Route path="/inbox" element={<Inbox />} />
-                <Route path="/inbox/:conversationId" element={<OrderDetail />} />
-                <Route path="/logout" element={<Logout />} />
-                <Route path="/admin" element={<Admin />} />
+            <MockApiProvider>
+                <Routes>
+                    <Route path="/" element={<Navigate to="/login" replace />} />
+                    <Route path="/login" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Login /></div>} />
+                    <Route path="/register" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Register /></div>} />
+                    <Route path="/seller" element={<Seller />} />
+                    <Route path="/client" element={<ClientWorkspace />} />
+                    <Route path="/checkout/:gigId" element={<Checkout />} />
+                    <Route path="/orders" element={<Orders />} />
+                    <Route path="/orders/:orderId" element={<OrderDetail />} />
+                    <Route path="/inbox" element={<Inbox />} />
+                    <Route path="/inbox/:conversationId" element={<OrderDetail />} />
+                    <Route path="/logout" element={<Logout />} />
+                    <Route path="/admin" element={<Admin />} />
 
-                {/* Protected routes */}
-                <Route path="/home" element={user ? <Container sx={{ mt: 4 }}><Home /></Container> : <Navigate to="/login" replace />} />
-                <Route path="/profile" element={user ? <Container sx={{ mt: 4 }}><Profile /></Container> : <Navigate to="/login" replace />} />
+                    {/* Protected routes */}
+                    <Route path="/home" element={user ? <Container sx={{ mt: 4 }}><Home /></Container> : <Navigate to="/login" replace />} />
+                    <Route path="/profile" element={user ? <Container sx={{ mt: 4 }}><Profile /></Container> : <Navigate to="/login" replace />} />
 
-                {/* Fallback */}
-                <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />
-            </Routes>
-        </MockApiProvider >
+                    {/* Fallback */}
+                    <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />
+                </Routes>
+            </MockApiProvider>
         </>
     );
 }

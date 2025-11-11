@@ -27,10 +27,11 @@ import {
     AppBar, Avatar, Badge, Box, Button, Card, CardContent, CardHeader, Chip,
     Container, Dialog, DialogActions, DialogContent, DialogTitle, Divider,
     FormControl,
-    Grid,
     IconButton,
     InputAdornment, InputLabel, LinearProgress, List, ListItem, ListItemText,
-    MenuItem, Paper, Select, Snackbar, Stack, Tab,
+    MenuItem,
+    Grid as MuiGrid,
+    Paper, Select, Snackbar, Stack, Tab,
     Table,
     TableBody,
     TableCell,
@@ -38,6 +39,10 @@ import {
     Tabs, TextField, Tooltip, Typography
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
+
+// Workaround: some MUI Grid type definitions conflict with our TypeScript setup here.
+// Create a local any-typed alias so JSX usages of <Grid .../> compile cleanly.
+const Grid: any = MuiGrid;
 
 // -----------------------------
 // Types
