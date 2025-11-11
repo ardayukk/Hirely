@@ -30,9 +30,22 @@ async function ensureCsrf() {
 }
 
 export function AuthProvider({ children }) {
+    // Demo credentials (change if you want different test creds)
+    const DEMO_EMAIL = 'demo@local';
+    const DEMO_PASSWORD = 'demo123';
+
+    // For demo mode (no backend) provide a default mock user so the app shows the Home page
+    // without requiring a login or a running backend. We start with null so login flow is exercised,
+    // but the demo credentials below are accepted locally by `login()`.
     const [user, setUser] = useState(null);
 
     async function login({ email, password }) {
+        // Local demo shortcut: accept demo credentials without calling the backend
+        if (email === DEMO_EMAIL && password === DEMO_PASSWORD) {
+            const demoUser = { id: 1, username: 'Demo User', email: DEMO_EMAIL };
+            setUser(demoUser);
+            return demoUser;
+        }
         try {
             await ensureCsrf();
             const csrftoken = getCookie('csrftoken');
