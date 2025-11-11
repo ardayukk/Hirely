@@ -9,7 +9,14 @@ import Login from '../pages/Login';
 import Profile from '../pages/Profile';
 import Register from '../pages/Register';
 import Seller from '../pages/Seller';
+import ClientWorkspace from '../pages/Client';
+import Checkout from '../pages/Checkout';
+import Orders from '../pages/Orders';
+import OrderDetail from '../pages/OrderDetail';
+import Inbox from '../pages/Inbox';
+import Logout from '../pages/Logout';
 import { ThemeModeContext } from './main';
+import { MockApiProvider } from '../context/MockApiProvider';
 
 function AppContent() {
     const location = useLocation();
@@ -38,9 +45,11 @@ function AppContent() {
                     <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
                         <Button component={Link} to="/home" variant="text">Artifact Comparator</Button>
                         <Button component={Link} to="/seller" variant="text">Seller</Button>
+                        <Button component={Link} to="/client" variant="text">Client</Button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Button onClick={handleLogout}>Logout</Button>
                             <Button component={Link} to="/seller">Seller</Button>
+                            <Button component={Link} to="/client">Client</Button>
                             <Button component={Link} to="/profile">Profile</Button>
                             <ThemeToggle />
                         </div>
@@ -48,11 +57,19 @@ function AppContent() {
                 </AppBar>
             )}
 
+            <MockApiProvider>
             <Routes>
                 <Route path="/" element={<Navigate to="/login" replace />} />
                 <Route path="/login" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Login /></div>} />
                 <Route path="/register" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Register /></div>} />
                 <Route path="/seller" element={<Seller />} />
+                <Route path="/client" element={<ClientWorkspace />} />
+                <Route path="/checkout/:gigId" element={<Checkout />} />
+                <Route path="/orders" element={<Orders />} />
+                <Route path="/orders/:orderId" element={<OrderDetail />} />
+                <Route path="/inbox" element={<Inbox />} />
+                <Route path="/inbox/:conversationId" element={<OrderDetail />} />
+                <Route path="/logout" element={<Logout />} />
 
                 {/* Protected routes */}
                 <Route path="/home" element={user ? <Container sx={{ mt: 4 }}><Home /></Container> : <Navigate to="/login" replace />} />
@@ -61,6 +78,7 @@ function AppContent() {
                 {/* Fallback */}
                 <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />
             </Routes>
+            </MockApiProvider>
         </>
     );
 }
