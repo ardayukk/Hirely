@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App.jsx';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider } from '../context/Authcontext';
 import reportWebVitals from './reportWebVitals';
 import { ThemeProvider } from '@mui/material/styles';
 import { createAppTheme } from './theme';

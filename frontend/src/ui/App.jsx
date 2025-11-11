@@ -4,11 +4,11 @@ import { AppBar, Toolbar, Button, Container, IconButton } from '@mui/material';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import { ThemeModeContext } from './main';
-import { useAuth } from './context/AuthContext'; // ✅ import your Auth hook
-import Home from './pages/Home';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Profile from './pages/Profile';
+import { useAuth } from '../context/Authcontext'; // ✅ import your Auth hook (fixed relative path & filename case)
+import Home from '../pages/Home';
+import Login from '../pages/Login';
+import Register from '../pages/Register';
+import Profile from '../pages/Profile';
 
 function AppContent() {
   const location = useLocation();
