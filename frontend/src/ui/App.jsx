@@ -16,6 +16,7 @@ import Orders from '../pages/Orders';
 import Profile from '../pages/Profile';
 import Register from '../pages/Register';
 import Seller from '../pages/Seller';
+import Admin from '../pages/Admin';
 import Payments from '../pages/Payments';
 import Workspace from '../pages/Workspace';
 import { ThemeModeContext } from './main';
@@ -47,6 +48,7 @@ function AppContent() {
                     <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
                         <Button component={Link} to="/home" variant="text">Artifact Comparator</Button>
                         <Button component={Link} to="/seller" variant="text">Seller</Button>
+                        <Button component={Link} to="/admin" variant="text">Admin</Button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Button onClick={handleLogout}>Logout</Button>
                             <Button component={Link} to="/seller">Seller</Button>
@@ -66,6 +68,7 @@ function AppContent() {
                 <Route path="/register" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Register /></div>} />
                 <Route path="/seller" element={<Seller />} />
                 <Route path="/client" element={<ClientWorkspace />} />
+                <Route path="/admin" element={<Admin />} />
                 <Route path="/workspace" element={<Workspace />} />
                 <Route path="/checkout/:gigId" element={<Checkout />} />
                 <Route path="/orders" element={<Orders />} />
