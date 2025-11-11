@@ -4,6 +4,7 @@ import { AppBar, Button, Container, IconButton, Toolbar } from '@mui/material';
 import { useContext } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/Authcontext'; // ✅ import your Auth hook (fixed relative path & filename case)
+import Admin from '../pages/Admin';
 import Home from '../pages/Home';
 import Login from '../pages/Login';
 import Profile from '../pages/Profile';
@@ -38,9 +39,11 @@ function AppContent() {
                     <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
                         <Button component={Link} to="/home" variant="text">Artifact Comparator</Button>
                         <Button component={Link} to="/seller" variant="text">Seller</Button>
+                        <Button component={Link} to="/admin" variant="text">Admin</Button>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Button onClick={handleLogout}>Logout</Button>
                             <Button component={Link} to="/seller">Seller</Button>
+                            <Button component={Link} to="/admin">Admin</Button>
                             <Button component={Link} to="/profile">Profile</Button>
                             <ThemeToggle />
                         </div>
@@ -53,6 +56,7 @@ function AppContent() {
                 <Route path="/login" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Login /></div>} />
                 <Route path="/register" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Register /></div>} />
                 <Route path="/seller" element={<Seller />} />
+                <Route path="/admin" element={<Admin />} />
 
                 {/* Protected routes */}
                 <Route path="/home" element={user ? <Container sx={{ mt: 4 }}><Home /></Container> : <Navigate to="/login" replace />} />
