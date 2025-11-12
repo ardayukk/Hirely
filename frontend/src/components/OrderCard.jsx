@@ -8,9 +8,17 @@ export default function OrderCard({ order, onView, onMessage }) {
         <Avatar>{order.seller.name?.[0] || 'S'}</Avatar>
         <Box sx={{ flex: 1 }}>
           <Typography variant="h6">{order.title}</Typography>
-          <Typography variant="body2" color="text.secondary">{order.seller.name} · {order.tier.name} · {order.price.total} {order.price.currency}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            {order.seller.name} · {order.tier?.name}
+            {order.orderType === 'big' ? (
+              <span> · {order.deliverables ? order.deliverables.length : 0} deliverables · {order.price?.total} {order.price?.currency}</span>
+            ) : (
+              <span> · {order.price?.total} {order.price?.currency}</span>
+            )}
+          </Typography>
           <Box sx={{ mt: 1 }}>
             <Chip label={order.status} size="small" sx={{ mr: 1 }} />
+            {order.orderType && <Chip label={order.orderType === 'big' ? 'Big' : 'Small'} size="small" sx={{ mr: 1 }} />}
             {order.dueDate && <Typography component="span" variant="caption" color="text.secondary">Due {new Date(order.dueDate).toLocaleDateString()}</Typography>}
           </Box>
         </Box>

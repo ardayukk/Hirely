@@ -24,6 +24,7 @@ export function MockApiProvider({ children }) {
       id: `ord_${Date.now()}`,
       title: payload.title || 'New Order',
       seller: { id: 'u_seller', name: 'Demo Seller' },
+      orderType: payload.orderType || 'small',
       tier: payload.tier || { id: 't1', name: 'Standard', price: 100, deliveryDays: 5 },
       price: payload.price || { subtotal: 100, fees: 5, tax: 0, total: 105, currency: 'USD' },
       status: 'submitted',
@@ -31,8 +32,63 @@ export function MockApiProvider({ children }) {
       revisionsAllowed: 2,
       revisionsRemaining: 2,
     };
+    // create deliverables according to orderType
+    if (payload.orderType === 'big' && Array.isArray(payload.deliverables) && payload.deliverables.length) {
+      newOrder.deliverables = payload.deliverables.map((d, idx) => ({ id: `d_${Date.now()}_${idx}`, description: d.description || '', dueDate: d.dueDate || null, amount: d.amount || 0, completed: false, paid: false }));
+    } else {
+      // small order: single deliverable
+      const amount = (payload.price && payload.price.total) || (payload.amount) || 0;
+      newOrder.deliverables = [{ id: `d_${Date.now()}`, description: payload.title || 'Single deliverable', dueDate: payload.deliveryDate || payload.deadline || null, amount, completed: false, paid: false }];
+    }
+
     setOrders((s) => [newOrder, ...s]);
     return Promise.resolve(newOrder);
+  }
+
+  function updateDeliverable(orderId, deliverableId, patch) {
+    let updatedOrder = null;
+    setOrders((prev) => {
+      const arr = prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const ds = (o.deliverables || []).map((d) => (d.id === deliverableId ? { ...d, ...patch } : d));
+        updatedOrder = { ...o, deliverables: ds };
+        return updatedOrder;
+      });
+      return arr;
+    });
+    return Promise.resolve(updatedOrder);
+  }
+
+  function completeDeliverable(orderId, deliverableId) {
+    return updateDeliverable(orderId, deliverableId, { completed: true });
+  }
+
+  function payDeliverable(orderId, deliverableId) {
+    return updateDeliverable(orderId, deliverableId, { paid: true });
+  }
+
+  function approveDeliverable(orderId, deliverableId) {
+    return updateDeliverable(orderId, deliverableId, { approved: true });
+  }
+
+  function leaveReview(orderId, deliverableId, review) {
+    // review: { rating, comment, author? }
+    let updatedOrder = null;
+    setOrders((prev) => {
+      const arr = prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const ds = (o.deliverables || []).map((d) => {
+          if (d.id !== deliverableId) return d;
+          const r = { id: `r_${Date.now()}`, rating: review.rating || 0, comment: review.comment || '', author: (profile && profile.displayName) || review.author || 'Anonymous', date: new Date().toISOString() };
+          const reviews = Array.isArray(d.reviews) ? [...d.reviews, r] : [r];
+          return { ...d, reviews };
+        });
+        updatedOrder = { ...o, deliverables: ds };
+        return updatedOrder;
+      });
+      return arr;
+    });
+    return Promise.resolve(updatedOrder);
   }
 
   function listMessages(orderId) {
@@ -77,6 +133,11 @@ export function MockApiProvider({ children }) {
       listOrders,
       getOrder,
       createOrder,
+      updateDeliverable,
+      completeDeliverable,
+      payDeliverable,
+  approveDeliverable,
+  leaveReview,
       listMessages,
       sendMessage,
       listConversations,

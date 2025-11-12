@@ -2,6 +2,7 @@ export const sampleOrders = [
   {
     id: 'ord_1',
     title: 'Design Landing Page',
+    orderType: 'small', // 'small' | 'big'
     seller: { id: 'u2', name: 'Jane Doe', avatar: '' },
     tier: { id: 't1', name: 'Standard', price: 150, deliveryDays: 5 },
     price: { subtotal: 150, fees: 5, tax: 0, total: 155, currency: 'USD' },
@@ -15,7 +16,10 @@ export const sampleOrders = [
       { id: 'ev2', type: 'payment', actor: 'system', time: '2025-11-11T09:01:00Z', data: { note: 'Payment received' } },
       { id: 'ev3', type: 'work_started', actor: 'seller', time: '2025-11-12T10:00:00Z', data: { note: 'Seller started work' } },
     ],
-    deliveries: [],
+    // small orders have a single deliverable
+    deliverables: [
+      { id: 'd_small_1', dueDate: '2025-11-20T23:59:59Z', description: 'Final landing page', amount: 155, completed: false, paid: true, approved: false, reviews: [] },
+    ],
   },
   {
     id: 'ord_2',
@@ -33,8 +37,11 @@ export const sampleOrders = [
       { id: 'ev2', type: 'payment', actor: 'system', time: '2025-11-10T09:01:00Z', data: { note: 'Payment received' } },
       { id: 'ev3', type: 'delivery', actor: 'seller', time: '2025-11-13T11:00:00Z', data: { note: 'Initial delivery', files: [{ id: 'f1', name: 'final.zip', url: '#' }] } },
     ],
-    deliveries: [
-      { id: 'd1', at: '2025-11-13T11:00:00Z', message: 'Initial delivery', files: [{ name: 'final.zip', url: '#' }] },
+    orderType: 'big',
+    // big orders have multiple deliverables, each with own amount/date
+    deliverables: [
+      { id: 'bd1', dueDate: '2025-11-13T11:00:00Z', description: 'Initial milestone - MVP', amount: 300, completed: true, paid: true, approved: true, files: [{ name: 'final.zip', url: '#' }], reviews: [{ id: 'r1', rating: 5, comment: 'Great work on the MVP', author: 'Demo Client', date: '2025-11-14T10:00:00Z' }] },
+      { id: 'bd2', dueDate: '2025-11-20T23:59:59Z', description: 'Final polish and QA', amount: 320, completed: false, paid: false, approved: false, reviews: [] },
     ],
   },
 ];
