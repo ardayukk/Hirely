@@ -27,6 +27,8 @@ function AppContent() {
     const { user, logout } = useAuth(); // ✅ get logout from context
     const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
 
+    const requireAuth = (element) => (user ? element : <Navigate to="/login" replace />);
+
     const handleLogout = () => {
         logout(); // calls the logout from AuthContext
         navigate('/login', { replace: true }); // redirect to login
@@ -65,24 +67,22 @@ function AppContent() {
                 <Route path="/" element={<Navigate to="/login" replace />} />
                 <Route path="/login" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Login /></div>} />
                 <Route path="/register" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Register /></div>} />
-                <Route path="/seller" element={<Seller />} />
-                <Route path="/client" element={<ClientWorkspace />} />
-                <Route path="/admin" element={<Admin />} />
-                <Route path="/workspace" element={<Workspace />} />
-                <Route path="/checkout/:gigId" element={<Checkout />} />
-                <Route path="/orders" element={<Orders />} />
-                <Route path="/orders/:orderId" element={<OrderDetail />} />
-                <Route path="/inbox" element={<Inbox />} />
-                <Route path="/inbox/:conversationId" element={<OrderDetail />} />
+
+                <Route path="/home" element={requireAuth(<Container sx={{ mt: 4 }}><Admin /></Container>)} />
+                <Route path="/profile" element={requireAuth(<Container sx={{ mt: 4 }}><Profile /></Container>)} />
+                <Route path="/seller" element={requireAuth(<Seller />)} />
+                <Route path="/client" element={requireAuth(<ClientWorkspace />)} />
+                <Route path="/admin" element={requireAuth(<Admin />)} />
+                <Route path="/workspace" element={requireAuth(<Workspace />)} />
+                <Route path="/checkout/:gigId" element={requireAuth(<Checkout />)} />
+                <Route path="/orders" element={requireAuth(<Orders />)} />
+                <Route path="/orders/:orderId" element={requireAuth(<OrderDetail />)} />
+                <Route path="/inbox" element={requireAuth(<Inbox />)} />
+                <Route path="/inbox/:conversationId" element={requireAuth(<OrderDetail />)} />
                 <Route path="/logout" element={<Logout />} />
 
-                    {/* Protected routes */}
-                    <Route path="/home" element={user ? <Container sx={{ mt: 4 }}><Admin /></Container> : <Navigate to="/login" replace />} />
-                    <Route path="/profile" element={user ? <Container sx={{ mt: 4 }}><Profile /></Container> : <Navigate to="/login" replace />} />
-
-                    {/* Fallback */}
-                    <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />
-                </Routes>
+                <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />
+            </Routes>
             </MockApiProvider>
         </>
     );

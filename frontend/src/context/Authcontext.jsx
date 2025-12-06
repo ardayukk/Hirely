@@ -1,6 +1,5 @@
-import axios from 'axios'; // 1. Import axios
+import axios from 'axios';
 import { createContext, useContext, useState } from 'react';
-import sha256Hex from '../helper/hash';
 
 const AuthContext = createContext(null);
 
@@ -20,15 +19,6 @@ function getCookie(name) {
     return null;
 }
 
-async function ensureCsrf() {
-    // Call backend endpoint that sets the CSRF cookie
-    try {
-        await axiosInstance.get('/auth/csrf/');
-    } catch (e) {
-        // ignore errors here; cookie may have been set or CORS blocked
-    }
-}
-
 export function AuthProvider({ children }) {
     // Demo credentials (change if you want different test creds)
     const DEMO_EMAIL = 'demo@local';
@@ -46,57 +36,25 @@ export function AuthProvider({ children }) {
             setUser(demoUser);
             return demoUser;
         }
-        try {
-            await ensureCsrf();
-            const csrftoken = getCookie('csrftoken');
-            // Hash password client-side before sending
-            const hashed = await sha256Hex(password);
-            const response = await axiosInstance.post(
-                '/auth/api/signin/',
-                { email, password: hashed },
-                { headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken } }
-            );
-
-            if (response.data?.success) {
-                setUser(response.data.user || null);
-                return response.data.user;
-            }
-            throw new Error(response.data?.error || 'Login failed');
-        } catch (err) {
-            const errMsg = err.response?.data?.error || err.message || 'Login failed';
-            throw new Error(errMsg);
-        }
+        const response = await axiosInstance.post(
+            '/api/auth/login',
+            { email, password },
+            { headers: { 'Content-Type': 'application/json' } }
+        );
+        setUser(response.data);
+        return response.data;
     }
 
     async function register({ username, email, password }) {
-        try {
-            await ensureCsrf();
-            const csrftoken = getCookie('csrftoken');
-            // Hash password client-side before sending
-            const hashed = await sha256Hex(password);
-            const response = await axiosInstance.post('/auth/api/signup/', {
-                username,
-                email,
-                password: hashed,
-            }, { headers: { 'X-CSRFToken': csrftoken } });
+        const response = await axiosInstance.post('/api/auth/register', {
+            username,
+            email,
+            password,
+            role: 'client',
+        });
 
-            // A successful signup returns the user data directly
-            setUser(response.data.user || null);
-            return response.data;
-        } catch (err) {
-            // Handle DRF validation errors or other issues
-            const errorData = err.response?.data;
-            let errMsg = 'Registration failed. Please try again.';
-
-            if (typeof errorData === 'object' && errorData !== null) {
-                // This will format DRF's validation error messages
-                errMsg = Object.values(errorData).flat().join(' ');
-            } else if (typeof errorData === 'string') {
-                errMsg = errorData;
-            }
-
-            throw new Error(errMsg);
-        }
+        setUser(response.data);
+        return response.data;
     }
 
     function logout() {

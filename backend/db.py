@@ -17,7 +17,8 @@ if not DATABASE_URL:
     db_host = os.getenv("DB_HOST", "localhost")
     db_port = os.getenv("DB_PORT", "5432")
     if all([db_name, db_user, db_pass]):
-        DATABASE_URL = f"postgresql+psycopg://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
+        # Standard psycopg DSN
+        DATABASE_URL = f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
 
 @asynccontextmanager
 async def get_connection() -> Any:
