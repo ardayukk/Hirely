@@ -46,14 +46,13 @@ function AppContent() {
             {!isAuthPage && user && ( // ✅ only show AppBar if user is logged in
                 <AppBar position="static" color="transparent" elevation={0} sx={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                     <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Button component={Link} to="/home" variant="text">Artifact Comparator</Button>
-                        <Button component={Link} to="/seller" variant="text">Seller</Button>
-                        <Button component={Link} to="/admin" variant="text">Admin</Button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Button component={Link} to="/seller" variant="text">Seller</Button>
+                            <Button component={Link} to="/admin" variant="text">Admin</Button>
+                            <Button component={Link} to="/client" variant="text">Client</Button>
+                        </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Button onClick={handleLogout}>Logout</Button>
-                            <Button component={Link} to="/seller">Seller</Button>
-                            <Button component={Link} to="/client">Client</Button>
-                            <Button component={Link} to="/workspace">Workspace</Button>
                             <Button component={Link} to="/profile">Profile</Button>
                             <ThemeToggle />
                         </div>
@@ -78,7 +77,7 @@ function AppContent() {
                 <Route path="/logout" element={<Logout />} />
 
                     {/* Protected routes */}
-                    <Route path="/home" element={user ? <Container sx={{ mt: 4 }}><Home /></Container> : <Navigate to="/login" replace />} />
+                    <Route path="/home" element={user ? <Container sx={{ mt: 4 }}><Admin /></Container> : <Navigate to="/login" replace />} />
                     <Route path="/profile" element={user ? <Container sx={{ mt: 4 }}><Profile /></Container> : <Navigate to="/login" replace />} />
 
                     {/* Fallback */}
