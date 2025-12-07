@@ -12,7 +12,7 @@ export default function ClientWorkspace() {
   const { getDashboardStats, getProfile } = useMockApi();
 
   useEffect(() => {
-    getDashboardStats().then(s => setStats(s));
+    getDashboardStats().then(s => setStats(s || { activeOrders: 0, unreadMessages: 0, pendingPayments: 0 }));
     getProfile().then(p => {/* could show profile */});
   }, []);
 

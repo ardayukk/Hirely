@@ -17,8 +17,11 @@ import Profile from '../pages/Profile';
 import Register from '../pages/Register';
 import Seller from '../pages/Seller';
 import Admin from '../pages/Admin';
-import Payments from '../pages/Payments';
 import Workspace from '../pages/Workspace';
+import Services from '../pages/Services';
+import ServiceDetail from '../pages/ServiceDetail';
+import CreateService from '../pages/CreateService';
+import MyServices from '../pages/MyServices';
 import { ThemeModeContext } from './main';
 
 function AppContent() {
@@ -49,11 +52,13 @@ function AppContent() {
                 <AppBar position="static" color="transparent" elevation={0} sx={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                     <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Button component={Link} to="/seller" variant="text">Seller</Button>
-                            <Button component={Link} to="/admin" variant="text">Admin</Button>
-                            <Button component={Link} to="/client" variant="text">Client</Button>
+                            <Button component={Link} to="/home#freelancer" variant="text">Freelancer</Button>
+                            <Button component={Link} to="/home#user" variant="text">User</Button>
+                            <Button component={Link} to="/home#admin" variant="text">Admin</Button>
+                            <Button component={Link} to="/services" variant="text">Services</Button>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Button component={Link} to="/home">Home</Button>
                             <Button onClick={handleLogout}>Logout</Button>
                             <Button component={Link} to="/profile">Profile</Button>
                             <ThemeToggle />
@@ -68,17 +73,21 @@ function AppContent() {
                 <Route path="/login" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Login /></div>} />
                 <Route path="/register" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Register /></div>} />
 
-                <Route path="/home" element={requireAuth(<Container sx={{ mt: 4 }}><Admin /></Container>)} />
+                <Route path="/home" element={requireAuth(<Home />)} />
                 <Route path="/profile" element={requireAuth(<Container sx={{ mt: 4 }}><Profile /></Container>)} />
                 <Route path="/seller" element={requireAuth(<Seller />)} />
                 <Route path="/client" element={requireAuth(<ClientWorkspace />)} />
                 <Route path="/admin" element={requireAuth(<Admin />)} />
                 <Route path="/workspace" element={requireAuth(<Workspace />)} />
-                <Route path="/checkout/:gigId" element={requireAuth(<Checkout />)} />
+                <Route path="/checkout/:serviceId" element={requireAuth(<Checkout />)} />
                 <Route path="/orders" element={requireAuth(<Orders />)} />
                 <Route path="/orders/:orderId" element={requireAuth(<OrderDetail />)} />
                 <Route path="/inbox" element={requireAuth(<Inbox />)} />
                 <Route path="/inbox/:conversationId" element={requireAuth(<OrderDetail />)} />
+                <Route path="/services" element={requireAuth(<Services />)} />
+                <Route path="/services/:serviceId" element={requireAuth(<ServiceDetail />)} />
+                <Route path="/create-service" element={requireAuth(<CreateService />)} />
+                <Route path="/myServices" element={requireAuth(<MyServices />)} />
                 <Route path="/logout" element={<Logout />} />
 
                 <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />

@@ -20,7 +20,10 @@ function getCookie(name) {
 }
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null);
+    const [user, setUser] = useState(() => {
+        const stored = localStorage.getItem('hirely_user');
+        return stored ? JSON.parse(stored) : null;
+    });
 
     async function login({ email, password }) {
         try {
@@ -30,6 +33,7 @@ export function AuthProvider({ children }) {
                 { headers: { 'Content-Type': 'application/json' } }
             );
             setUser(response.data);
+            localStorage.setItem('hirely_user', JSON.stringify(response.data));
             return response.data;
         } catch (err) {
             // Extract error detail from backend response
@@ -48,6 +52,7 @@ export function AuthProvider({ children }) {
             });
 
             setUser(response.data);
+            localStorage.setItem('hirely_user', JSON.stringify(response.data));
             return response.data;
         } catch (err) {
             // Extract error detail from backend response
@@ -57,8 +62,8 @@ export function AuthProvider({ children }) {
     }
 
     function logout() {
-        // You can add a call to a backend logout endpoint here if you create one
         setUser(null);
+        localStorage.removeItem('hirely_user');
     }
 
     return (

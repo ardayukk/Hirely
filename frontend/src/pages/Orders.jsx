@@ -1,26 +1,98 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Typography, Box } from '@mui/material';
-import OrderCard from '../components/OrderCard';
-import { useMockApi } from '../context/MockApiProvider';
+import { Box, Card, CardContent, Chip, Container, Grid, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { axiosInstance, useAuth } from '../context/Authcontext';
 
 export default function Orders() {
-  const { listOrders } = useMockApi();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
-  const nav = useNavigate();
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    listOrders().then(setOrders);
-  }, []);
+    if (user?.id) {
+      fetchOrders();
+    }
+  }, [user]);
+
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get(`/api/orders?user_id=${user.id}`);
+      setOrders(res.data || []);
+    } catch (err) {
+      console.error('Failed to load orders', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      pending: '#ff9800',
+      in_progress: '#2196f3',
+      delivered: '#4caf50',
+      revision_requested: '#ff5722',
+      cancelled: '#9e9e9e',
+      completed: '#4caf50',
+    };
+    return colors[status] || '#9e9e9e';
+  };
+
+  if (loading) {
+    return (
+      <Container sx={{ mt: 4 }}>
+        <Typography>Loading orders...</Typography>
+      </Container>
+    );
+  }
 
   return (
     <Container sx={{ mt: 4 }}>
       <Typography variant="h4" gutterBottom>My Orders</Typography>
-      <Box>
-        {orders.map((o) => (
-          <OrderCard key={o.id} order={o} onView={(order)=>nav(`/orders/${order.id}`)} onMessage={(order)=>nav(`/inbox/${order.id}`)} />
+      
+      {orders.length === 0 && (
+        <Typography color="text.secondary">No orders yet.</Typography>
+      )}
+
+      <Grid container spacing={3} sx={{ mt: 2 }}>
+        {orders.map((order) => (
+          <Grid item xs={12} md={6} key={order.order_id}>
+            <Card sx={{ cursor: 'pointer' }} onClick={() => navigate(`/orders/${order.order_id}`)}>
+              <CardContent>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6">Order #{order.order_id}</Typography>
+                  <Chip
+                    label={order.status}
+                    sx={{
+                      backgroundColor: getStatusColor(order.status),
+                      color: '#fff',
+                      fontWeight: 'bold',
+                    }}
+                  />
+                </Box>
+                
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Service ID: {order.service_id}
+                </Typography>
+                
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Order Date: {new Date(order.order_date).toLocaleDateString()}
+                </Typography>
+                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                    ${order.total_price.toFixed(2)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {order.revision_count} revision{order.revision_count !== 1 ? 's' : ''}
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
         ))}
-      </Box>
+      </Grid>
     </Container>
   );
 }

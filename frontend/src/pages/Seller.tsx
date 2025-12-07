@@ -1784,7 +1784,7 @@ const api = {
 function delay(ms: number) { return new Promise((res) => setTimeout(res, ms)); }
 
 // ---------------------------------------------------------
-// DEMO DATA (seed)
+// DEMO DATA (seed) - ALL CLEARED
 // ---------------------------------------------------------
 const now = Date.now();
 let demo: {
@@ -1795,124 +1795,26 @@ let demo: {
     profile: SellerProfile;
     portfolio: PortfolioItem[];
 } = {
-    services: [
-        {
-            id: "svc_alpha",
-            title: "Design a modern responsive landing page",
-            description: "I will design a pixel-perfect, responsive landing page with Figma + handoff.\nIncludes basic motion and dark/light support.",
-            category: "Design",
-            subcategory: "UI/UX",
-            tags: ["figma", "landing", "responsive"],
-            status: "active",
-            coverUrl: "https://images.unsplash.com/photo-1559027615-5ee22a6b95c0?q=80&w=1200&auto=format&fit=crop",
-            mediaUrls: [
-                "https://images.unsplash.com/photo-1559027615-5ee22a6b95c0?q=80&w=1200&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1547658719-da2b51169166?q=80&w=1200&auto=format&fit=crop"
-            ],
-            packages: [
-                { name: "Basic", price: 49, deliveryDays: 3, revisions: 1, features: ["1 section", "Wireframe"] },
-                { name: "Standard", price: 129, deliveryDays: 5, revisions: 2, features: ["3 sections", "Visual design"] },
-                { name: "Premium", price: 299, deliveryDays: 7, revisions: 3, features: ["5 sections", "Design system snippet"] }
-            ],
-            rating: 4.9,
-            totalReviews: 82,
-            createdAt: new Date(now - 86400000 * 40).toISOString(),
-            updatedAt: new Date(now - 86400000 * 2).toISOString()
-        },
-        {
-            id: "svc_beta",
-            title: "Develop a secure REST API with Node.js",
-            description: "Production-ready REST API with authentication, validation, and tests.",
-            category: "Programming",
-            subcategory: "Web Back-end",
-            tags: ["node", "express", "jwt"],
-            status: "paused",
-            mediaUrls: [],
-            packages: [
-                { name: "Basic", price: 99, deliveryDays: 4, revisions: 1, features: ["CRUD endpoints"] },
-                { name: "Standard", price: 249, deliveryDays: 7, revisions: 2, features: ["Auth + Docs"] }
-            ],
-            createdAt: new Date(now - 86400000 * 22).toISOString(),
-            updatedAt: new Date(now - 86400000 * 10).toISOString()
-        }
-    ],
-    orders: [
-        {
-            id: "ord_1001",
-            serviceId: "svc_alpha",
-            serviceTitle: "Design a modern responsive landing page",
-            buyerName: "Alice",
-            submittedAt: new Date(now - 86400000 * 2).toISOString(),
-            dueAt: new Date(now + 86400000 * 0.5).toISOString(),
-            price: 129,
-            currency: "USD",
-            status: "in_progress",
-            requirements: "Target audience: fintech founders.\nBrand: teal + purple.\nDeliver Figma link + export hero visuals.",
-            allowedRevisions: 2,
-            usedRevisions: 1,
-            thread: [
-                { id: "m1", author: "buyer", body: "Can we add pricing table?", at: new Date(now - 86400000).toISOString() },
-                { id: "m2", author: "seller", body: "Yes, I can include it in Standard/Premium.", at: new Date(now - 86400000 + 3600000).toISOString() }
-            ],
-            deliveries: []
-        },
-        {
-            id: "ord_1002",
-            serviceId: "svc_alpha",
-            serviceTitle: "Design a modern responsive landing page",
-            buyerName: "Bob",
-            submittedAt: new Date(now - 86400000 * 5).toISOString(),
-            dueAt: new Date(now - 3600000).toISOString(), // overdue
-            price: 299,
-            currency: "USD",
-            status: "delivered",
-            requirements: "Brand: eco-friendly.\nDeliver Figma file and 2 PNGs.",
-            allowedRevisions: 2,
-            usedRevisions: 0,
-            thread: [{ id: "m3", author: "seller", body: "First delivery uploaded.", at: new Date(now - 7200000).toISOString() }],
-            deliveries: [{ id: "d1", at: new Date(now - 7200000).toISOString(), files: [{ name: "landing.fig" }, { name: "hero.png" }], message: "Initial handoff" }]
-        },
-        {
-            id: "ord_1003",
-            serviceId: "svc_beta",
-            serviceTitle: "Develop a secure REST API with Node.js",
-            buyerName: "Charlie",
-            submittedAt: new Date(now - 86400000 * 1).toISOString(),
-            dueAt: new Date(now + 86400000 * 3).toISOString(),
-            price: 249,
-            currency: "USD",
-            status: "submitted",
-            requirements: "JWT auth, rate limiting, Swagger docs.",
-            allowedRevisions: 1,
-            usedRevisions: 0,
-            thread: [],
-            deliveries: []
-        }
-    ],
+    services: [],
+    orders: [],
     wallet: {
-        available: 420,
-        pending: 258,
+        available: 0,
+        pending: 0,
         currency: "USD",
-        onTimeRate: 0.92,
-        transactions: [
-            { id: "t1", type: "order_income", amount: 129, at: new Date(now - 86400000 * 3).toISOString(), note: "Order ord_0950" },
-            { id: "t2", type: "withdrawal", amount: -300, at: new Date(now - 86400000 * 7).toISOString() },
-            { id: "t3", type: "fee", amount: -6, at: new Date(now - 86400000 * 7).toISOString(), note: "Withdrawal fee" }
-        ]
+        onTimeRate: 0,
+        transactions: []
     },
     payout: {
         kycStatus: "not_started",
         method: undefined
     },
     profile: {
-        displayName: "Enes Y.",
-        bio: "UI/UX and full-stack dev. I help startups ship fast.",
-        languages: [{ code: "en", level: "Fluent" }, { code: "tr", level: "Native" }],
-        skills: ["figma", "react", "node", "tailwind"],
+        displayName: "",
+        bio: "",
+        languages: [],
+        skills: [],
         vacationMode: false
     },
-    portfolio: [
-        { id: "pf_1", title: "Hero Shot", type: "image", url: "https://images.unsplash.com/photo-1547658719-da2b51169166?q=80&w=1200&auto=format&fit=crop", order: 1 },
-        { id: "pf_2", title: "Dashboard Concept", type: "image", url: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=1200&auto=format&fit=crop", order: 2 }
-    ]
+    portfolio: []
 };
+

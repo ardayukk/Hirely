@@ -1,0 +1,62 @@
+from pydantic import BaseModel
+from typing import Optional, List
+from datetime import datetime
+
+
+class OrderCreate(BaseModel):
+    """Client places an order for a service"""
+    service_id: int
+    total_price: float
+    order_type: str  # 'small' or 'big'
+    delivery_date: Optional[datetime] = None  # for small orders
+    milestone_count: Optional[int] = None  # for big orders
+    milestone_delivery_date: Optional[datetime] = None
+
+
+class OrderPublic(BaseModel):
+    order_id: int
+    order_date: datetime
+    status: str
+    revision_count: int
+    total_price: float
+    review_given: bool
+    service_id: int
+    client_id: int
+    freelancer_id: Optional[int] = None
+
+
+class OrderDetail(OrderPublic):
+    service_title: Optional[str] = None
+    service_category: Optional[str] = None
+    freelancer_name: Optional[str] = None
+    client_name: Optional[str] = None
+    is_big_order: bool = False
+    milestone_count: Optional[int] = None
+    current_phase: Optional[int] = None
+
+
+class RevisionCreate(BaseModel):
+    """Client requests a revision"""
+    revision_text: str
+
+
+class RevisionPublic(BaseModel):
+    revision_id: int
+    revision_text: str
+    revision_no: int
+    order_id: int
+    client_id: int
+
+
+class ReviewCreate(BaseModel):
+    """Client leaves a review after completion"""
+    rating: int  # 1-5
+    comment: Optional[str] = None
+
+
+class ReviewPublic(BaseModel):
+    review_id: int
+    rating: int
+    comment: Optional[str]
+    client_id: int
+    service_id: int

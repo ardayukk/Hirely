@@ -75,6 +75,26 @@ export default function Profile() {
     }
   };
 
+  const handleDevRole = async (role) => {
+    if (!user?.id) return;
+    try {
+      await axiosInstance.post("/api/auth/dev/set-role", { user_id: user.id, role });
+      // Refresh profile to reflect the new role
+      const res = await axiosInstance.get(`/api/users/${user.id}`);
+      const data = res.data;
+      setProfile({
+        name: data.name || "",
+        email: data.email,
+        role: data.role,
+        organization: data.address || "",
+      });
+      alert(`Role set to ${role} (dev only). Re-login if navigation depends on role.`);
+    } catch (err) {
+      console.error("Failed to set role", err);
+      alert(err.response?.data?.detail || "Failed to set role");
+    }
+  };
+
   const handleDisable = async () => {
     if (!window.confirm("Are you sure you want to disable your account?")) return;
     try {
@@ -266,6 +286,31 @@ export default function Profile() {
 
             {/* ✅ Disable / Delete buttons */}
             <Box textAlign="center" mt={3} display="flex" flexDirection="column" gap={1}>
+              <Button
+                variant="contained"
+                color="primary"
+                sx={{ textTransform: "none" }}
+                onClick={() => handleDevRole("freelancer")}
+              >
+                Set Role: Freelancer (dev)
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                sx={{ textTransform: "none" }}
+                onClick={() => handleDevRole("client")}
+              >
+                Set Role: Client (dev)
+              </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                sx={{ textTransform: "none" }}
+                onClick={() => handleDevRole("admin")}
+              >
+                Set Role: Admin (dev)
+              </Button>
+
               <Button
                 variant="outlined"
                 color="warning"
