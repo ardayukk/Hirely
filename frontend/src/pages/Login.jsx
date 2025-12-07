@@ -7,9 +7,8 @@ import colors from '../helper/colors';
 export default function Login() {
   const nav = useNavigate();
   const { login } = useAuth();
-  // Prefill with demo credentials (use these to log in without a backend)
-  const [email, setEmail] = useState('demo@local');
-  const [password, setPassword] = useState('demo123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
   const [bubbles, setBubbles] = useState([]);
   const bubbleRefs = useRef([]);

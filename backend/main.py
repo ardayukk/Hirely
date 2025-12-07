@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import health, jobs, db_test, auth
+from routers import health, jobs, db_test, auth, users
 
 app = FastAPI(title="Hirely API", version="0.1.0")
 
@@ -19,6 +19,7 @@ app.include_router(health.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
 app.include_router(db_test.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
 
 @app.get("/")
 def root():

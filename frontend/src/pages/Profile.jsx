@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Avatar,
   Box,
@@ -11,17 +11,42 @@ import {
   Fade,
 } from "@mui/material";
 import colors from "../helper/colors";
-import { axiosInstance } from "../context/Authcontext.jsx";
-import { getCookie } from "../context/_helpers";
+import { useAuth, axiosInstance } from "../context/Authcontext.jsx";
 
 export default function Profile() {
+  const { user } = useAuth();
   const [editing, setEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState({
-    name: "Arda Yüksel",
-    email: "arda.yuksel@bilkent.edu.tr",
-    role: "Researcher",
-    organization: "Bilkent University",
+    name: user?.username || "",
+    email: user?.email || "",
+    role: user?.role || "",
+    organization: "",
   });
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        const res = await axiosInstance.get(`/api/users/${user.id}`);
+        const data = res.data;
+        setProfile({
+          name: data.name || user.username || "",
+          email: data.email,
+          role: data.role,
+          organization: data.address || "",
+        });
+      } catch (err) {
+        console.error("Failed to load profile", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [user]);
 
   const handleChange = (e) => {
     setProfile({ ...profile, [e.target.name]: e.target.value });
@@ -29,9 +54,21 @@ export default function Profile() {
 
   const handleSave = async () => {
     try {
-      // TODO: integrate backend update endpoint (e.g. PUT /api/user/update)
-      // await axios.put("http://localhost:8000/api/user/update/", profile);
-      console.log("Profile saved:", profile);
+      if (!user?.id) return;
+      const payload = {
+        name: profile.name,
+        email: profile.email,
+        address: profile.organization,
+      };
+
+      const res = await axiosInstance.put(`/api/users/${user.id}`, payload);
+      const data = res.data;
+      setProfile({
+        name: data.name || "",
+        email: data.email,
+        role: data.role,
+        organization: data.address || "",
+      });
       setEditing(false);
     } catch (err) {
       console.error("Error updating profile:", err);
@@ -41,17 +78,8 @@ export default function Profile() {
   const handleDisable = async () => {
     if (!window.confirm("Are you sure you want to disable your account?")) return;
     try {
-      // ensure CSRF cookie present and send POST to disable endpoint
-      await axiosInstance.get('/auth/csrf/');
-      const csrftoken = getCookie('csrftoken');
-      const res = await axiosInstance.post('/auth/api/disable/', {}, { headers: { 'X-CSRFToken': csrftoken } });
-      if (res.data?.success) {
-        alert('Your account has been disabled. You will be logged out.');
-        // redirect to login or home
-        window.location.href = '/login';
-      } else {
-        alert(res.data?.error || 'Disable failed');
-      }
+      // TODO: implement disable endpoint
+      alert('Disable functionality not yet implemented');
     } catch (err) {
       console.error("Error disabling account:", err);
     }
@@ -60,15 +88,8 @@ export default function Profile() {
   const handleDelete = async () => {
     if (!window.confirm("This will permanently delete your account. Continue?")) return;
     try {
-      await axiosInstance.get('/auth/csrf/');
-      const csrftoken = getCookie('csrftoken');
-      const res = await axiosInstance.post('/auth/api/delete/', {}, { headers: { 'X-CSRFToken': csrftoken } });
-      if (res.data?.success) {
-        alert('Your account has been deleted. Redirecting to goodbye page.');
-        window.location.href = '/';
-      } else {
-        alert(res.data?.error || 'Delete failed');
-      }
+      // TODO: implement delete endpoint
+      alert('Delete functionality not yet implemented');
     } catch (err) {
       console.error("Error deleting account:", err);
     }
@@ -134,6 +155,12 @@ export default function Profile() {
                 {profile.role}
               </Typography>
             </Box>
+
+            {loading && (
+              <Typography variant="body2" sx={{ color: colors.color3, mb: 2 }}>
+                Loading profile...
+              </Typography>
+            )}
 
             <Grid container spacing={2}>
               <Grid item xs={12}>
@@ -269,15 +296,7 @@ export default function Profile() {
                   },
                 }}
                 onClick={async () => {
-                  try {
-                    await axiosInstance.get('/auth/csrf/');
-                    const csrftoken = getCookie('csrftoken');
-                    const res = await axiosInstance.post('/auth/api/enable/', {}, { headers: { 'X-CSRFToken': csrftoken } });
-                    if (res.data?.success) alert('Account enabled');
-                    else alert(res.data?.error || 'Enable failed');
-                  } catch (err) {
-                    console.error('Error enabling account', err);
-                  }
+                  alert("Enable endpoint not implemented yet");
                 }}
               >
                 Re-enable Account

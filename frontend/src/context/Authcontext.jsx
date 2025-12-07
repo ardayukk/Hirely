@@ -20,41 +20,40 @@ function getCookie(name) {
 }
 
 export function AuthProvider({ children }) {
-    // Demo credentials (change if you want different test creds)
-    const DEMO_EMAIL = 'demo@local';
-    const DEMO_PASSWORD = 'demo123';
-
-    // For demo mode (no backend) provide a default mock user so the app shows the Home page
-    // without requiring a login or a running backend. We start with null so login flow is exercised,
-    // but the demo credentials below are accepted locally by `login()`.
     const [user, setUser] = useState(null);
 
     async function login({ email, password }) {
-        // Local demo shortcut: accept demo credentials without calling the backend
-        if (email === DEMO_EMAIL && password === DEMO_PASSWORD) {
-            const demoUser = { id: 1, username: 'Demo User', email: DEMO_EMAIL };
-            setUser(demoUser);
-            return demoUser;
+        try {
+            const response = await axiosInstance.post(
+                '/api/auth/login',
+                { email, password },
+                { headers: { 'Content-Type': 'application/json' } }
+            );
+            setUser(response.data);
+            return response.data;
+        } catch (err) {
+            // Extract error detail from backend response
+            const detail = err.response?.data?.detail || 'Login failed';
+            throw new Error(detail);
         }
-        const response = await axiosInstance.post(
-            '/api/auth/login',
-            { email, password },
-            { headers: { 'Content-Type': 'application/json' } }
-        );
-        setUser(response.data);
-        return response.data;
     }
 
     async function register({ username, email, password }) {
-        const response = await axiosInstance.post('/api/auth/register', {
-            username,
-            email,
-            password,
-            role: 'client',
-        });
+        try {
+            const response = await axiosInstance.post('/api/auth/register', {
+                username,
+                email,
+                password,
+                role: 'client',
+            });
 
-        setUser(response.data);
-        return response.data;
+            setUser(response.data);
+            return response.data;
+        } catch (err) {
+            // Extract error detail from backend response
+            const detail = err.response?.data?.detail || 'Registration failed';
+            throw new Error(detail);
+        }
     }
 
     function logout() {
