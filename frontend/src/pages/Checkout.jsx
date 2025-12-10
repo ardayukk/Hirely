@@ -37,12 +37,15 @@ export default function Checkout() {
       setLoading(true);
       setError('');
 
+      const normalizedDelivery = orderType === 'small' && deliveryDate ? deliveryDate : null;
+      const normalizedMilestones = orderType === 'big' && Number.isFinite(milestoneCount) ? milestoneCount : 3;
+
       const payload = {
         service_id: parseInt(serviceId),
         total_price: service.hourly_price || 100,
         order_type: orderType,
-        delivery_date: orderType === 'small' ? deliveryDate : null,
-        milestone_count: orderType === 'big' ? milestoneCount : null,
+        delivery_date: normalizedDelivery,
+        milestone_count: orderType === 'big' ? normalizedMilestones : null,
       };
 
       const res = await axiosInstance.post(`/api/orders?client_id=${user.id}`, payload);
@@ -50,7 +53,9 @@ export default function Checkout() {
       navigate('/orders');
     } catch (err) {
       console.error('Failed to place order', err);
-      setError(err.response?.data?.detail || 'Failed to place order');
+      const detail = err.response?.data?.detail;
+      const message = typeof detail === 'string' ? detail : detail ? JSON.stringify(detail) : 'Failed to place order';
+      setError(message);
     } finally {
       setLoading(false);
     }

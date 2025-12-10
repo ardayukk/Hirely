@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Card, CardContent, Chip, Container, Grid, Typography } from '@mui/material';
+import { Box, Card, CardContent, Chip, Container, Grid, Typography, Button } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { axiosInstance, useAuth } from '../context/Authcontext';
 
@@ -58,7 +58,7 @@ export default function Orders() {
       <Grid container spacing={3} sx={{ mt: 2 }}>
         {orders.map((order) => (
           <Grid item xs={12} md={6} key={order.order_id}>
-            <Card sx={{ cursor: 'pointer' }} onClick={() => navigate(`/orders/${order.order_id}`)}>
+            <Card>
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Typography variant="h6">Order #{order.order_id}</Typography>
@@ -87,6 +87,15 @@ export default function Orders() {
                   <Typography variant="caption" color="text.secondary">
                     {order.revision_count} revision{order.revision_count !== 1 ? 's' : ''}
                   </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                  <Button fullWidth variant="outlined" onClick={() => navigate(`/orders/${order.order_id}`)}>
+                    View
+                  </Button>
+                  <Button fullWidth variant="contained" onClick={() => navigate(`/orders/${order.order_id}#chat`)}>
+                    Message
+                  </Button>
                 </Box>
               </CardContent>
             </Card>

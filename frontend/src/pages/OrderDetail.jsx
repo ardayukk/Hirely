@@ -1,19 +1,40 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Typography, Box, Paper, Divider, Button, Chip, Grid, Alert } from '@mui/material';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Container, Typography, Box, Paper, Divider, Button, Chip, Grid, Alert, CircularProgress } from '@mui/material';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { axiosInstance, useAuth } from '../context/Authcontext';
+import ChatComposer from '../components/ChatComposer';
 
 export default function OrderDetail() {
   const { orderId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [chatOpen, setChatOpen] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [messageError, setMessageError] = useState('');
+  const [disputeLoading, setDisputeLoading] = useState(false);
+  const [disputeError, setDisputeError] = useState('');
 
   useEffect(() => {
     fetchOrder();
   }, [orderId]);
+
+  useEffect(() => {
+    if (chatOpen) {
+      loadMessages();
+    }
+  }, [chatOpen]);
+
+  useEffect(() => {
+    if (location.hash === '#chat') {
+      setChatOpen(true);
+    }
+  }, [location.hash]);
 
   const fetchOrder = async () => {
     try {
@@ -25,6 +46,37 @@ export default function OrderDetail() {
       setError(err.response?.data?.detail || 'Failed to load order details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMessages = async () => {
+    if (!user?.id) return;
+    try {
+      setLoadingMessages(true);
+      setMessageError('');
+      const res = await axiosInstance.get(`/api/messages?order_id=${orderId}&user_id=${user.id}`);
+      setMessages(res.data || []);
+    } catch (err) {
+      console.error('Failed to load messages', err);
+      setMessageError(err.response?.data?.detail || 'Failed to load messages');
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  const handleSendMessage = async ({ text }) => {
+    if (!text?.trim()) return;
+    try {
+      setSending(true);
+      await axiosInstance.post(`/api/messages?sender_id=${user.id}`, {
+        order_id: Number(orderId),
+        message_text: text,
+      });
+      await loadMessages();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to send message');
+    } finally {
+      setSending(false);
     }
   };
 
@@ -101,6 +153,25 @@ export default function OrderDetail() {
       alert('Review submitted');
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to submit review');
+    }
+  };
+
+  const handleOpenDispute = async () => {
+    const reason = prompt('Describe the issue (optional):');
+    try {
+      setDisputeLoading(true);
+      setDisputeError('');
+      await axiosInstance.post(`/api/disputes?client_id=${user.id}`, {
+        order_id: Number(orderId),
+        reason: reason || null,
+      });
+      await fetchOrder();
+      alert('Dispute opened. An admin will review it.');
+    } catch (err) {
+      console.error('Failed to open dispute', err);
+      setDisputeError(err.response?.data?.detail || 'Failed to open dispute');
+    } finally {
+      setDisputeLoading(false);
     }
   };
 
@@ -229,10 +300,65 @@ export default function OrderDetail() {
               </Button>
             )}
 
+            {isClient && !['disputed', 'cancelled'].includes(order.status) && (
+              <Button fullWidth variant="outlined" color="warning" sx={{ mb: 1 }} onClick={handleOpenDispute} disabled={disputeLoading}>
+                {disputeLoading ? 'Opening Dispute...' : 'Open Dispute'}
+              </Button>
+            )}
+
+            <Button fullWidth variant="outlined" sx={{ mb: 1 }} onClick={() => setChatOpen((prev) => !prev)}>
+              {chatOpen ? 'Hide Chat' : 'Open Chat'}
+            </Button>
+
             <Button fullWidth variant="outlined" onClick={() => navigate('/orders')}>
               Back to Orders
             </Button>
           </Paper>
+
+          {disputeError && (
+            <Alert severity="error" sx={{ mt: 2 }}>{disputeError}</Alert>
+          )}
+
+          {chatOpen && (
+            <Paper sx={{ p: 3, mt: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant="h6">Chat</Typography>
+                {loadingMessages && <CircularProgress size={20} />}
+              </Box>
+              {messageError && <Alert severity="error" sx={{ mb: 2 }}>{messageError}</Alert>}
+              <Box sx={{ maxHeight: 320, overflowY: 'auto', pr: 1, mb: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {messages.length === 0 && !loadingMessages && (
+                  <Typography color="text.secondary">No messages yet. Say hello!</Typography>
+                )}
+                {messages.map((m) => {
+                  const fromMe = m.sender_id === user.id;
+                  return (
+                    <Box
+                      key={m.message_id}
+                      sx={{
+                        alignSelf: fromMe ? 'flex-end' : 'flex-start',
+                        backgroundColor: fromMe ? 'primary.main' : 'grey.100',
+                        color: fromMe ? '#fff' : 'text.primary',
+                        px: 1.5,
+                        py: 1,
+                        borderRadius: 2,
+                        maxWidth: '80%',
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                        {fromMe ? 'You' : m.sender_name || `User ${m.sender_id}`}
+                      </Typography>
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{m.message_text}</Typography>
+                      <Typography variant="caption" sx={{ display: 'block', opacity: 0.7 }}>
+                        {new Date(m.timestamp).toLocaleString()}
+                      </Typography>
+                    </Box>
+                  );
+                })}
+              </Box>
+              <ChatComposer onSend={handleSendMessage} disabled={sending} />
+            </Paper>
+          )}
         </Grid>
       </Grid>
     </Container>

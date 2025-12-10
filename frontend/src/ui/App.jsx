@@ -16,7 +16,7 @@ import Orders from '../pages/Orders';
 import Profile from '../pages/Profile';
 import Register from '../pages/Register';
 import Seller from '../pages/Seller';
-import Admin from '../pages/Admin';
+import Admin from '../pages/AdminDisputes';
 import Workspace from '../pages/Workspace';
 import Services from '../pages/Services';
 import ServiceDetail from '../pages/ServiceDetail';

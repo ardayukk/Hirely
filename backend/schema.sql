@@ -211,9 +211,9 @@ CREATE TABLE IF NOT EXISTS "Report" (
 CREATE TABLE IF NOT EXISTS "reported" (
     dispute_id INTEGER NOT NULL,
     client_id INTEGER NOT NULL,
-    admin_id INTEGER NOT NULL,
+    admin_id INTEGER,
     order_id INTEGER NOT NULL,
-    PRIMARY KEY (dispute_id, client_id, admin_id, order_id),
+    PRIMARY KEY (dispute_id, client_id, order_id),
     FOREIGN KEY (dispute_id) REFERENCES "Dispute"(dispute_id) ON DELETE CASCADE,
     FOREIGN KEY (client_id) REFERENCES "Client"(user_id) ON DELETE CASCADE,
     FOREIGN KEY (admin_id) REFERENCES "Admin"(user_id) ON DELETE CASCADE,
@@ -346,3 +346,117 @@ CREATE INDEX idx_order_date ON "Order"(order_date);
 CREATE INDEX idx_messages_sender ON "Messages"(sender_id);
 CREATE INDEX idx_messages_receiver ON "Messages"(receiver_id);
 CREATE INDEX idx_review_client ON "Review"(client_id);
+
+-- Allow reported.admin_id to be nullable (admin can be assigned later)
+DO $$
+BEGIN
+        IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'reported' AND column_name = 'admin_id' AND is_nullable = 'NO'
+        ) THEN
+                EXECUTE 'ALTER TABLE "reported" ALTER COLUMN admin_id DROP NOT NULL';
+        END IF;
+    -- Ensure primary key does not include admin_id so it can be NULL
+    BEGIN
+        EXECUTE 'ALTER TABLE "reported" DROP CONSTRAINT IF EXISTS reported_pkey';
+        EXECUTE 'ALTER TABLE "reported" ADD PRIMARY KEY (dispute_id, client_id, order_id)';
+    EXCEPTION WHEN others THEN NULL;
+    END;
+END $$;
+
+-- ============================================
+-- VIEWS FOR ANALYTICS / ADMIN
+-- ============================================
+
+CREATE OR REPLACE VIEW ActiveOrdersPerFreelancer AS
+SELECT
+    f.user_id         AS freelancer_id,
+    na.name           AS freelancer_name,
+    COUNT(*)          AS active_order_count
+FROM "Order" o
+JOIN finish_order fo ON o.order_id = fo.order_id
+JOIN "Freelancer" f ON fo.freelancer_id = f.user_id
+JOIN "NonAdmin" na ON f.user_id = na.user_id
+WHERE o.status IN ('pending', 'in_progress', 'delivered', 'revision_requested')
+GROUP BY f.user_id, na.name;
+
+CREATE OR REPLACE VIEW TopServicesByRating AS
+SELECT
+    s.service_id,
+    s.title,
+    s.category,
+    s.average_rating,
+    COUNT(r.review_id) AS review_count
+FROM "Service" s
+LEFT JOIN give_review gr ON s.service_id = gr.service_id
+LEFT JOIN "Review" r ON gr.review_id = r.review_id
+GROUP BY s.service_id, s.title, s.category, s.average_rating;
+
+-- ============================================
+-- TRIGGER TO KEEP FREELANCER RATINGS IN SYNC
+-- ============================================
+
+CREATE OR REPLACE FUNCTION update_freelancer_rating()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE "Freelancer" f
+    SET avg_rating = (
+                SELECT AVG(r.rating)
+                FROM "Update_Rating" ur
+                JOIN "Review" r ON ur.review_id = r.review_id
+                WHERE ur.freelancer_id = f.user_id
+            ),
+            total_reviews = (
+                SELECT COUNT(*)
+                FROM "Update_Rating" ur
+                WHERE ur.freelancer_id = f.user_id
+            ),
+            total_orders = (
+                SELECT COUNT(*) FROM finish_order fo WHERE fo.freelancer_id = f.user_id
+            )
+    WHERE f.user_id = NEW.freelancer_id;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_update_freelancer_rating ON "Update_Rating";
+CREATE TRIGGER trg_update_freelancer_rating
+AFTER INSERT ON "Update_Rating"
+FOR EACH ROW
+EXECUTE FUNCTION update_freelancer_rating();
+
+-- ============================================
+-- SCHEMA UPDATES (Drop & Recreate for Modifications)
+-- ============================================
+-- When schema changes after initial creation, we drop and recreate affected tables with raw SQL.
+-- This complies with CS353: no ORM, no migration framework, all raw SQL.
+
+DROP TABLE IF EXISTS "reported" CASCADE;
+
+CREATE TABLE "reported" (
+    dispute_id INTEGER NOT NULL,
+    client_id INTEGER NOT NULL,
+    admin_id INTEGER,
+    order_id INTEGER NOT NULL,
+    PRIMARY KEY (dispute_id, client_id, order_id),
+    FOREIGN KEY (dispute_id) REFERENCES "Dispute"(dispute_id) ON DELETE CASCADE,
+    FOREIGN KEY (client_id) REFERENCES "Client"(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (admin_id) REFERENCES "Admin"(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE
+);
+
+DROP TABLE IF EXISTS "cancel" CASCADE;
+
+CREATE TABLE "cancel" (
+    client_id INTEGER NOT NULL,
+    freelancer_id INTEGER NOT NULL,
+    order_id INTEGER NOT NULL,
+    admin_id INTEGER,
+    PRIMARY KEY (client_id, freelancer_id, order_id),
+    FOREIGN KEY (client_id) REFERENCES "Client"(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
+    FOREIGN KEY (admin_id) REFERENCES "Admin"(user_id) ON DELETE CASCADE
+);
+
