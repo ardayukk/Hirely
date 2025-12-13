@@ -3,8 +3,8 @@ from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Query
 
-from db import get_connection
-from schemas.service import (
+from backend.db import get_connection
+from backend.schemas.service import (
     ServiceCreate,
     ServicePublic,
     ServiceDetail,

@@ -1,8 +1,8 @@
 from typing import List
 from fastapi import APIRouter, HTTPException, Query
 
-from db import get_connection
-from schemas.message import (
+from backend.db import get_connection
+from backend.schemas.message import (
     MessageCreate,
     MessagePublic,
     ConversationMessage,

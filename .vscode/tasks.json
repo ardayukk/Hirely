@@ -1,0 +1,14 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Backend (Uvicorn)",
+			"type": "shell",
+			"command": "C:/Users/arday/miniconda3/Scripts/conda.exe run -p C:\\Users\\arday\\miniconda3 --no-capture-output uvicorn backend.main:app --reload --port 8000",
+			"args": [],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}
