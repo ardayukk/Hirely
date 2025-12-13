@@ -5,10 +5,10 @@ from routers import health, jobs, db_test, auth, users, services, orders, messag
 
 app = FastAPI(title="Hirely API", version="0.1.0")
 
-# CORS for local dev (Vite default port 5173)
+# CORS for local dev (allow all localhost ports for development)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

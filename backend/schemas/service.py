@@ -61,5 +61,15 @@ class SampleWorkUpdate(BaseModel):
     sample_work: str
 
 
+class ServiceUpdate(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+    delivery_time: Optional[int] = None
+    hourly_price: Optional[float] = None
+    package_tier: Optional[str] = None
+    status: Optional[str] = None
+
+
 class AddOnCreate(BaseModel):
     addon_service_id: int
