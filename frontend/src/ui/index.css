@@ -1,13 +1,75 @@
+/* CSS Design Tokens (Light Mode) */
+:root {
+  --color-primary: #3D7D6E;
+  --color-primary-hover: #2F6B5E;
+  --color-accent: #FFB347;
+  --color-accent-hover: #FFA02B;
+  --color-bg: #F5F9F8;
+  --color-bg-alt: #E8F3F1;
+  --color-surface: #FFFFFF;
+  --color-border: #D7E2DF;
+  --color-text: #1F2A28;
+  --color-text-muted: #5A6C68;
+  --color-success: #2EAF74;
+  --color-warning: #E2A400;
+  --color-error: #D9534F;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+}
+
+/* Dark Mode Overrides */
+[data-theme='dark'] {
+  --color-bg: #141716;
+  --color-bg-alt: #1E211F;
+  --color-surface: #1E211F;
+  --color-border: #2A3230;
+  --color-text: #F0F4F3;
+  --color-text-muted: #A2B3AF;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: 'Source Code Pro', Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
+
+/* Utility classes */
+.surface {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.surface-hover:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.text-muted { color: var(--color-text-muted); }
+
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-primary:hover { background: var(--color-primary-hover); }
+
+.fade-enter { opacity: 0; }
+.fade-enter-active { opacity: 1; transition: opacity .25s ease; }

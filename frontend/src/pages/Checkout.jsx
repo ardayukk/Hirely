@@ -1,152 +1,91 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Container, Grid, Box, Typography, Select, MenuItem, TextField, Button, Alert } from '@mui/material';
-import { axiosInstance, useAuth } from '../context/Authcontext';
+import React, { useState } from 'react';
+import { Container, Grid, Box, Typography, Select, MenuItem, TextField, IconButton } from '@mui/material';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import CheckoutTiers from '../components/CheckoutTiers';
+import RequirementsEditor from '../components/RequirementsEditor';
+import PriceSummary from '../components/PriceSummary';
+import { useMockApi } from '../context/MockApiProvider';
+
+const demoTiers = [
+  { id: 't1', name: 'Basic', price: 80, deliveryDays: 3 },
+  { id: 't2', name: 'Standard', price: 150, deliveryDays: 5 },
+  { id: 't3', name: 'Premium', price: 350, deliveryDays: 10 },
+];
 
 export default function Checkout() {
-  const { serviceId } = useParams();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const [service, setService] = useState(null);
+  const { createOrder } = useMockApi();
+  const [tier, setTier] = useState('t2');
+  const [requirements, setRequirements] = useState({ short: '', detail: '' });
+  const [price, setPrice] = useState({ subtotal: 150, fees: 5, tax: 0, total: 155, currency: 'USD' });
   const [orderType, setOrderType] = useState('small');
-  const [deliveryDate, setDeliveryDate] = useState('');
-  const [milestoneCount, setMilestoneCount] = useState(3);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [smallDeliveryDate, setSmallDeliveryDate] = useState('');
+  const [bigDeliverables, setBigDeliverables] = useState([{ description: '', dueDate: '', amount: 0 }]);
 
-  useEffect(() => {
-    const fetchService = async () => {
-      try {
-        const res = await axiosInstance.get(`/api/services/${serviceId}`);
-        setService(res.data);
-      } catch (err) {
-        console.error('Failed to load service', err);
-        setError('Could not load service details');
-      }
+  const handlePay = async () => {
+    const tierObj = demoTiers.find(t=>t.id===tier);
+    const payload = {
+      title: requirements.short || 'New project',
+      tier: tierObj,
+      price,
+      orderType,
     };
-    if (serviceId) fetchService();
-  }, [serviceId]);
-
-  const handlePlaceOrder = async () => {
-    if (!user || user.role !== 'client') {
-      alert('You must be logged in as a client to place an order');
-      return;
+    if (orderType === 'small') {
+      payload.deliveryDate = smallDeliveryDate || null;
+      payload.amount = price.total;
+    } else {
+      payload.deliverables = bigDeliverables.map(d => ({ description: d.description, dueDate: d.dueDate, amount: Number(d.amount) || 0 }));
     }
 
-    try {
-      setLoading(true);
-      setError('');
-
-      const normalizedDelivery = orderType === 'small' && deliveryDate ? deliveryDate : null;
-      const normalizedMilestones = orderType === 'big' && Number.isFinite(milestoneCount) ? milestoneCount : 3;
-
-      const payload = {
-        service_id: parseInt(serviceId),
-        total_price: service.hourly_price || 100,
-        order_type: orderType,
-        delivery_date: normalizedDelivery,
-        milestone_count: orderType === 'big' ? normalizedMilestones : null,
-      };
-
-      const res = await axiosInstance.post(`/api/orders?client_id=${user.id}`, payload);
-      alert(`Order placed successfully! Order ID: ${res.data.order_id}`);
-      navigate('/orders');
-    } catch (err) {
-      console.error('Failed to place order', err);
-      const detail = err.response?.data?.detail;
-      const message = typeof detail === 'string' ? detail : detail ? JSON.stringify(detail) : 'Failed to place order';
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
+    const order = await createOrder(payload);
+    // navigate to order detail in a full app; here we just console.log
+    console.log('order created', order);
+    alert('Order created (mock): ' + order.id);
   };
-
-  if (!service) {
-    return (
-      <Container sx={{ mt: 4 }}>
-        <Typography>Loading service...</Typography>
-      </Container>
-    );
-  }
 
   return (
     <Container sx={{ mt: 4 }}>
       <Typography variant="h4" gutterBottom>Checkout</Typography>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      
       <Grid container spacing={3}>
         <Grid item xs={12} md={7}>
-          <Box sx={{ p: 3, border: '1px solid #e0e0e0', borderRadius: 2 }}>
-            <Typography variant="h6" gutterBottom>{service.title}</Typography>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              {service.description}
-            </Typography>
-            <Typography variant="h6" sx={{ mt: 2 }}>
-              ${service.hourly_price ? service.hourly_price.toFixed(2) : 'N/A'}/hr
-            </Typography>
-          </Box>
-
-          <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle1" gutterBottom>Order Type</Typography>
-            <Select value={orderType} onChange={(e) => setOrderType(e.target.value)} fullWidth>
-              <MenuItem value="small">Small Order (Single Delivery)</MenuItem>
-              <MenuItem value="big">Big Order (Milestones)</MenuItem>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="subtitle1">Order Type</Typography>
+            <Select value={orderType} onChange={(e)=>setOrderType(e.target.value)} size="small" sx={{ mt: 1 }}>
+              <MenuItem value="small">Small order (single delivery)</MenuItem>
+              <MenuItem value="big">Big order (multiple deliverables)</MenuItem>
             </Select>
           </Box>
+          <CheckoutTiers tiers={demoTiers} value={tier} onChange={setTier} />
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="h6">Requirements</Typography>
+            <RequirementsEditor value={requirements} onChange={setRequirements} onAttach={() => alert('Attach not implemented in mock')} />
+          </Box>
 
-          {orderType === 'small' && (
+          {orderType === 'small' ? (
             <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle1" gutterBottom>Delivery Date</Typography>
-              <TextField
-                type="date"
-                fullWidth
-                value={deliveryDate}
-                onChange={(e) => setDeliveryDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
+              <Typography variant="subtitle1">Delivery</Typography>
+              <TextField label="Delivery date" type="date" size="small" InputLabelProps={{ shrink: true }} value={smallDeliveryDate} onChange={(e)=>setSmallDeliveryDate(e.target.value)} sx={{ mt: 1 }} />
             </Box>
-          )}
-
-          {orderType === 'big' && (
+          ) : (
             <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle1" gutterBottom>Number of Milestones</Typography>
-              <TextField
-                type="number"
-                fullWidth
-                value={milestoneCount}
-                onChange={(e) => setMilestoneCount(parseInt(e.target.value))}
-                inputProps={{ min: 1, max: 10 }}
-              />
+              <Typography variant="subtitle1">Deliverables</Typography>
+              {bigDeliverables.map((d, idx) => (
+                <Box key={idx} sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 1 }}>
+                  <TextField placeholder="Description" size="small" value={d.description} onChange={(e)=>{ const arr = [...bigDeliverables]; arr[idx].description = e.target.value; setBigDeliverables(arr); }} />
+                  <TextField type="date" size="small" value={d.dueDate} InputLabelProps={{ shrink: true }} onChange={(e)=>{ const arr = [...bigDeliverables]; arr[idx].dueDate = e.target.value; setBigDeliverables(arr); }} />
+                  <TextField placeholder="Amount" size="small" type="number" value={d.amount} onChange={(e)=>{ const arr = [...bigDeliverables]; arr[idx].amount = e.target.value; setBigDeliverables(arr); }} sx={{ width: 120 }} />
+                  <IconButton onClick={()=>{ const arr = bigDeliverables.filter((_,i)=>i!==idx); setBigDeliverables(arr.length?arr:[{ description: '', dueDate: '', amount: 0 }]); }}><RemoveCircleOutlineIcon /></IconButton>
+                </Box>
+              ))}
+              <Box sx={{ mt: 1 }}>
+                <IconButton onClick={()=>setBigDeliverables((s)=>[...s, { description: '', dueDate: '', amount: 0 }])}><AddCircleOutlineIcon /></IconButton>
+                <Typography component="span" sx={{ ml: 1 }}>Add deliverable</Typography>
+              </Box>
             </Box>
           )}
         </Grid>
-
         <Grid item xs={12} md={5}>
-          <Box sx={{ p: 3, border: '1px solid #e0e0e0', borderRadius: 2 }}>
-            <Typography variant="h6" gutterBottom>Order Summary</Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography>Service Price:</Typography>
-              <Typography>${service.hourly_price ? service.hourly_price.toFixed(2) : 'N/A'}</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography>Type:</Typography>
-              <Typography>{orderType === 'small' ? 'Small' : 'Big (Milestones)'}</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', mt: 2, pt: 2, borderTop: '1px solid #e0e0e0' }}>
-              <Typography>Total:</Typography>
-              <Typography>${service.hourly_price ? service.hourly_price.toFixed(2) : 'N/A'}</Typography>
-            </Box>
-
-            <Button
-              variant="contained"
-              fullWidth
-              sx={{ mt: 3 }}
-              onClick={handlePlaceOrder}
-              disabled={loading}
-            >
-              {loading ? 'Placing Order...' : 'Place Order'}
-            </Button>
-          </Box>
+          <PriceSummary price={price} onPay={handlePay} />
         </Grid>
       </Grid>
     </Container>
