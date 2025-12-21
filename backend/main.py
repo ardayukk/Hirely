@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import health, jobs, db_test, auth, users, services, orders, messages, disputes, analytics
+from db import init_pool, close_pool
 
 app = FastAPI(title="Hirely API", version="0.1.0")
 
@@ -13,6 +14,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize and close connection pool
+@app.on_event("startup")
+async def startup():
+    await init_pool()
+
+@app.on_event("shutdown")
+async def shutdown():
+    await close_pool()
 
 # Routers
 app.include_router(health.router, prefix="/api")

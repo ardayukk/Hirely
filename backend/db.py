@@ -3,6 +3,7 @@ from typing import Any
 from contextlib import asynccontextmanager
 
 import psycopg
+from psycopg_pool import AsyncConnectionPool
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,9 +21,26 @@ if not DATABASE_URL:
         # Standard psycopg DSN
         DATABASE_URL = f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
 
-@asynccontextmanager
-async def get_connection() -> Any:
+# Initialize connection pool at module level
+_pool: AsyncConnectionPool = None
+
+async def init_pool():
+    """Initialize the connection pool (call on app startup)."""
+    global _pool
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is not set")
-    async with await psycopg.AsyncConnection.connect(DATABASE_URL) as conn:
+    _pool = AsyncConnectionPool(DATABASE_URL, min_size=5, max_size=20)
+    await _pool.open()
+
+async def close_pool():
+    """Close the connection pool (call on app shutdown)."""
+    global _pool
+    if _pool:
+        await _pool.close()
+
+@asynccontextmanager
+async def get_connection() -> Any:
+    if not _pool:
+        raise RuntimeError("Connection pool not initialized")
+    async with _pool.connection() as conn:
         yield conn
