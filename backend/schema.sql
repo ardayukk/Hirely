@@ -73,8 +73,9 @@ CREATE TABLE IF NOT EXISTS "Service" (
     delivery_time INTEGER,
     hourly_price DECIMAL(10, 2),
     package_tier TEXT,
-    status TEXT DEFAULT 'active',
-    average_rating DECIMAL(3, 2) DEFAULT 0.00
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'PAUSED')),
+    average_rating DECIMAL(3, 2) DEFAULT 0.00,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS "SampleWork" (

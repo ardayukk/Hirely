@@ -3,8 +3,8 @@ from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Query
 
-from backend.db import get_connection
-from backend.schemas.service import (
+from db import get_connection
+from schemas.service import (
     ServiceCreate,
     ServicePublic,
     ServiceDetail,
@@ -12,6 +12,7 @@ from backend.schemas.service import (
     ReviewSummary,
     SampleWorkUpdate,
     AddOnCreate,
+    ServiceUpdate,
 )
 
 router = APIRouter(prefix="/services", tags=["services"])
@@ -49,7 +50,7 @@ async def create_service(service: ServiceCreate, freelancer_id: int = Query(...)
                         service.delivery_time,
                         service.hourly_price,
                         service.package_tier,
-                        "active",
+                        "ACTIVE",
                         0.0,
                     ),
                 )
@@ -134,7 +135,7 @@ async def browse_services(
                   AND (%s::NUMERIC IS NULL OR s.hourly_price <= %s)
                   AND (%s::INTEGER IS NULL OR s.delivery_time <= %s)
                   AND (%s::NUMERIC IS NULL OR s.average_rating >= %s)
-                  AND s.status = 'active'
+                  AND s.status = 'ACTIVE'
             """
 
             # Dynamic ORDER BY
@@ -402,3 +403,162 @@ async def get_freelancer_services(freelancer_id: int):
                 for r in rows
             ]
             return services
+
+
+# ============================================
+# SERVICE MANAGEMENT (Pause/Reactivate/Edit)
+# ============================================
+
+@router.patch("/{service_id}", response_model=ServicePublic)
+async def edit_service(service_id: int, update: ServiceUpdate, freelancer_id: int = Query(...)):
+    """
+    Edit service details (title, description, price, delivery time).
+    Only the freelancer who owns the service can edit it.
+    """
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify ownership
+            await cur.execute(
+                'SELECT service_id FROM create_service WHERE service_id = %s AND freelancer_id = %s',
+                (service_id, freelancer_id),
+            )
+            if not await cur.fetchone():
+                raise HTTPException(status_code=403, detail="Not authorized to edit this service")
+
+            # Build dynamic UPDATE
+            updates = []
+            values = []
+            if update.title is not None:
+                updates.append("title = %s")
+                values.append(update.title)
+            if update.description is not None:
+                updates.append("description = %s")
+                values.append(update.description)
+            if update.delivery_time is not None:
+                updates.append("delivery_time = %s")
+                values.append(update.delivery_time)
+            if update.hourly_price is not None:
+                updates.append("hourly_price = %s")
+                values.append(update.hourly_price)
+            if update.package_tier is not None:
+                updates.append("package_tier = %s")
+                values.append(update.package_tier)
+
+            if not updates:
+                # No updates provided, just return current service
+                await cur.execute(
+                    'SELECT service_id, title, category, description, delivery_time, hourly_price, package_tier, status, average_rating FROM "Service" WHERE service_id = %s',
+                    (service_id,),
+                )
+            else:
+                updates.append("updated_at = NOW()")
+                query = f"UPDATE \"Service\" SET {', '.join(updates)} WHERE service_id = %s RETURNING service_id, title, category, description, delivery_time, hourly_price, package_tier, status, average_rating"
+                values.append(service_id)
+                await cur.execute(query, values)
+
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Service not found")
+
+            await conn.commit()
+            return ServicePublic(
+                service_id=row[0],
+                title=row[1],
+                category=row[2],
+                description=row[3],
+                delivery_time=row[4],
+                hourly_price=float(row[5]) if isinstance(row[5], Decimal) else row[5],
+                package_tier=row[6],
+                status=row[7],
+                average_rating=float(row[8]) if isinstance(row[8], Decimal) else row[8],
+            )
+
+
+@router.patch("/{service_id}/pause", response_model=ServicePublic)
+async def pause_service(service_id: int, freelancer_id: int = Query(...)):
+    """
+    Pause a service (hide it from client browse).
+    Only ACTIVE services can be paused.
+    Only the freelancer who owns the service can pause it.
+    """
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify ownership and status
+            await cur.execute(
+                'SELECT service_id FROM create_service WHERE service_id = %s AND freelancer_id = %s',
+                (service_id, freelancer_id),
+            )
+            if not await cur.fetchone():
+                raise HTTPException(status_code=403, detail="Not authorized to pause this service")
+
+            # Pause only if ACTIVE
+            await cur.execute(
+                """
+                UPDATE "Service"
+                SET status = 'PAUSED', updated_at = NOW()
+                WHERE service_id = %s AND status = 'ACTIVE'
+                RETURNING service_id, title, category, description, delivery_time, hourly_price, package_tier, status, average_rating
+                """,
+                (service_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=400, detail="Service is not active or not found")
+
+            await conn.commit()
+            return ServicePublic(
+                service_id=row[0],
+                title=row[1],
+                category=row[2],
+                description=row[3],
+                delivery_time=row[4],
+                hourly_price=float(row[5]) if isinstance(row[5], Decimal) else row[5],
+                package_tier=row[6],
+                status=row[7],
+                average_rating=float(row[8]) if isinstance(row[8], Decimal) else row[8],
+            )
+
+
+@router.patch("/{service_id}/reactivate", response_model=ServicePublic)
+async def reactivate_service(service_id: int, freelancer_id: int = Query(...)):
+    """
+    Reactivate a paused service.
+    Only PAUSED services can be reactivated.
+    Only the freelancer who owns the service can reactivate it.
+    """
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify ownership and status
+            await cur.execute(
+                'SELECT service_id FROM create_service WHERE service_id = %s AND freelancer_id = %s',
+                (service_id, freelancer_id),
+            )
+            if not await cur.fetchone():
+                raise HTTPException(status_code=403, detail="Not authorized to reactivate this service")
+
+            # Reactivate only if PAUSED
+            await cur.execute(
+                """
+                UPDATE "Service"
+                SET status = 'ACTIVE', updated_at = NOW()
+                WHERE service_id = %s AND status = 'PAUSED'
+                RETURNING service_id, title, category, description, delivery_time, hourly_price, package_tier, status, average_rating
+                """,
+                (service_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=400, detail="Service is not paused or not found")
+
+            await conn.commit()
+            return ServicePublic(
+                service_id=row[0],
+                title=row[1],
+                category=row[2],
+                description=row[3],
+                delivery_time=row[4],
+                hourly_price=float(row[5]) if isinstance(row[5], Decimal) else row[5],
+                package_tier=row[6],
+                status=row[7],
+                average_rating=float(row[8]) if isinstance(row[8], Decimal) else row[8],
+            )

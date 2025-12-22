@@ -2,8 +2,8 @@ from datetime import datetime
 from typing import List
 from fastapi import APIRouter, HTTPException
 
-from backend.db import get_connection
-from backend.schemas.analytics import AnalyticsSummary, CategoryMetric, AnalyticsSnapshot
+from db import get_connection
+from schemas.analytics import AnalyticsSummary, CategoryMetric, AnalyticsSnapshot
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 

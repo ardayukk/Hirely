@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from backend.db import get_connection
+from db import get_connection
 
 router = APIRouter(prefix="/db-test", tags=["db"])
 
