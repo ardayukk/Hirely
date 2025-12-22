@@ -72,5 +72,13 @@ class ServiceUpdate(BaseModel):
     status: Optional[str] = None
 
 
+class ServiceUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    delivery_time: Optional[int] = None
+    hourly_price: Optional[float] = None
+    package_tier: Optional[str] = None
+
+
 class AddOnCreate(BaseModel):
     addon_service_id: int

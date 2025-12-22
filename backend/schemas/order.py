@@ -21,6 +21,11 @@ class OrderPublic(BaseModel):
     order_date: datetime
     status: str
     revision_count: int
+    included_revision_limit: Optional[int] = None
+    extra_revisions_purchased: int = 0
+    revisions_unlimited: bool = False
+    revisions_allowed: Optional[int] = None
+    revisions_remaining: Optional[int] = None
     total_price: float
     review_given: bool
     service_id: int
@@ -44,6 +49,10 @@ class OrderDetail(OrderPublic):
 class RevisionCreate(BaseModel):
     """Client requests a revision"""
     revision_text: str
+
+
+class PurchaseRevisionsRequest(BaseModel):
+    quantity: int
 
 
 class RevisionPublic(BaseModel):

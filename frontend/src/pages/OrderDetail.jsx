@@ -18,14 +18,15 @@ import {
   Rating,
 } from '@mui/material';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { axiosInstance, useAuth } from '../context/Authcontext';
 import ChatComposer from '../components/ChatComposer';
+import { axiosInstance, useAuth } from '../context/Authcontext';
 
 export default function OrderDetail() {
   const { orderId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -61,9 +62,9 @@ export default function OrderDetail() {
     const loadAddonDetails = async () => {
       if (!order?.addon_service_ids || order.addon_service_ids.length === 0) return;
       try {
-        const promises = order.addon_service_ids.map(id => axiosInstance.get(`/api/services/${id}`));
+        const promises = order.addon_service_ids.map((id) => axiosInstance.get(`/api/services/${id}`));
         const results = await Promise.all(promises);
-        setAddonDetails(results.map(r => r.data));
+        setAddonDetails(results.map((r) => r.data));
       } catch (err) {
         console.error('Failed to load addon details', err);
       }
@@ -187,6 +188,7 @@ export default function OrderDetail() {
   const handleRequestRevision = async () => {
     const text = prompt('Describe what needs to be revised:');
     if (!text) return;
+
     try {
       await axiosInstance.post(`/api/orders/${orderId}/revisions?client_id=${user.id}`, {
         revision_text: text,
@@ -194,10 +196,32 @@ export default function OrderDetail() {
       await fetchOrder();
       alert('Revision requested');
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to request revision');
+      const detail = err.response?.data?.detail;
+      const message = typeof detail === 'string' ? detail : 'Failed to request revision';
+
+      if (message.toLowerCase().includes('revision limit reached')) {
+        const buy = confirm(`${message}\n\nWould you like to purchase an additional revision now?`);
+        if (buy) {
+          const qtyStr = prompt('How many additional revisions would you like to purchase?', '1');
+          const qty = Number(qtyStr || 0);
+          if (Number.isFinite(qty) && qty > 0) {
+            try {
+              await axiosInstance.post(`/api/orders/${orderId}/purchase-revisions?client_id=${user.id}`, {
+                quantity: qty,
+              });
+              await fetchOrder();
+              alert('Additional revisions purchased. You can request a revision now.');
+            } catch (e2) {
+              alert(e2.response?.data?.detail || 'Failed to purchase revisions');
+            }
+            return;
+          }
+        }
+      }
+
+      alert(message || 'Failed to request revision');
     }
   };
-
 
   const handleOpenDispute = async () => {
     const reason = prompt('Describe the issue (optional):');
@@ -274,7 +298,19 @@ export default function OrderDetail() {
 
             <Box sx={{ mb: 2 }}>
               <Typography variant="body2" color="text.secondary">Revisions</Typography>
-              <Typography variant="body1">{order.revision_count}</Typography>
+              <Typography variant="body1">
+                {order.revision_count}
+                {order.revisions_unlimited
+                  ? ' (Unlimited)'
+                  : typeof order.revisions_allowed === 'number'
+                    ? ` / ${order.revisions_allowed} allowed`
+                    : ''}
+              </Typography>
+              {!order.revisions_unlimited && typeof order.revisions_remaining === 'number' && (
+                <Typography variant="caption" color="text.secondary">
+                  {order.revisions_remaining} revision{order.revisions_remaining === 1 ? '' : 's'} remaining
+                </Typography>
+              )}
             </Box>
 
             {order.is_big_order && (
@@ -290,7 +326,7 @@ export default function OrderDetail() {
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>Participants</Typography>
             <Divider sx={{ mb: 2 }} />
-            
+
             <Box sx={{ mb: 2 }}>
               <Typography variant="body2" color="text.secondary">Client</Typography>
               <Typography variant="body1">{order.client_name || `Client #${order.client_id}`}</Typography>
@@ -306,7 +342,7 @@ export default function OrderDetail() {
             <Typography variant="h6" gutterBottom>Add-ons</Typography>
             <Divider sx={{ mb: 2 }} />
             {addonDetails.length > 0 ? (
-              addonDetails.map(a => (
+              addonDetails.map((a) => (
                 <Box key={a.service_id} sx={{ mb: 1 }}>
                   <Typography sx={{ fontWeight: 'bold' }}>{a.title}</Typography>
                   <Typography variant="caption" color="text.secondary">{a.description || ''} — ${a.hourly_price ? a.hourly_price.toFixed(2) : '0.00'}</Typography>
@@ -447,7 +483,6 @@ export default function OrderDetail() {
         </Grid>
       </Grid>
 
-      {/* Review Dialog */}
       <Dialog open={reviewDialogOpen} onClose={() => setReviewDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Leave a Rating & Review</DialogTitle>
         <DialogContent>
@@ -487,9 +522,9 @@ export default function OrderDetail() {
           <Button onClick={() => setReviewDialogOpen(false)} disabled={submittingReview}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleSubmitReview} 
-            variant="contained" 
+          <Button
+            onClick={handleSubmitReview}
+            variant="contained"
             disabled={submittingReview || !reviewData.rating}
           >
             {submittingReview ? 'Submitting...' : 'Submit Review'}
