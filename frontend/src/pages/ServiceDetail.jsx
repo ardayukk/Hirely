@@ -322,7 +322,7 @@ export default function ServiceDetail() {
               >
                 Back
               </Button>
-              {user && user.role === 'client' && (
+              {user && user.role === 'freelancer' && (
                 <Button
                   variant="outlined"
                   sx={{

@@ -28,6 +28,13 @@ export default function CreateService() {
     package_tier: "",
     sample_work: "",
   });
+  const [addons, setAddons] = useState([]);
+
+  const addAddonRow = () => setAddons((a) => [...a, { title: '', description: '', delivery_time: 1, hourly_price: 0.0 }]);
+  const removeAddonRow = (index) => setAddons((a) => a.filter((_, i) => i !== index));
+  const handleAddonChange = (index, field, value) => {
+    setAddons((a) => a.map((ad, i) => (i === index ? { ...ad, [field]: value } : ad)));
+  };
 
   const handleChange = (e) => {
     setService({ ...service, [e.target.name]: e.target.value });
@@ -60,8 +67,30 @@ export default function CreateService() {
       };
 
       const res = await axiosInstance.post(`/api/services?freelancer_id=${user.id}`, payload);
+      const createdService = res.data;
 
-      alert(`Service "${res.data.title}" created successfully!`);
+      // create and link addons if any
+      if (addons.length > 0) {
+        for (const ad of addons) {
+          try {
+            const addonPayload = {
+              title: ad.title,
+              category: 'Add-on',
+              description: ad.description || null,
+              delivery_time: ad.delivery_time ? parseInt(ad.delivery_time) : null,
+              hourly_price: ad.hourly_price ? parseFloat(ad.hourly_price) : null,
+              package_tier: 'addon',
+            };
+            const createAddonRes = await axiosInstance.post(`/api/services?freelancer_id=${user.id}`, addonPayload);
+            const addonId = createAddonRes.data.service_id;
+            await axiosInstance.post(`/api/services/${createdService.service_id}/addons?freelancer_id=${user.id}`, { addon_service_id: addonId });
+          } catch (err) {
+            console.error('Failed to create/link addon', err);
+          }
+        }
+      }
+
+      alert(`Service "${createdService.title}" created successfully!`);
       setService({
         title: "",
         category: "",
@@ -71,6 +100,7 @@ export default function CreateService() {
         package_tier: "",
         sample_work: "",
       });
+      setAddons([]);
     } catch (err) {
       console.error("Failed to create service", err);
       alert(err.response?.data?.detail || "Failed to create service. Please try again.");
@@ -244,6 +274,35 @@ export default function CreateService() {
                     }}
                   />
                 </Grid>
+                {user?.role === 'freelancer' && (
+                  <Grid item xs={12}>
+                    <Typography variant="h6" sx={{ color: colors.color1, mb: 1 }}>Add-ons (optional)</Typography>
+                    {addons.map((ad, idx) => (
+                      <Card key={idx} sx={{ mb: 2, backgroundColor: colors.color4, p: 2 }}>
+                        <Grid container spacing={1} alignItems="center">
+                          <Grid item xs={12} sm={6}>
+                            <TextField label="Title" fullWidth value={ad.title} onChange={(e) => handleAddonChange(idx, 'title', e.target.value)} />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <TextField label="Price ($)" type="number" fullWidth value={ad.hourly_price} onChange={(e) => handleAddonChange(idx, 'hourly_price', e.target.value)} />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <TextField label="Delivery Time (days)" type="number" fullWidth value={ad.delivery_time} onChange={(e) => handleAddonChange(idx, 'delivery_time', e.target.value)} />
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <Button variant="outlined" color="error" onClick={() => removeAddonRow(idx)}>Remove</Button>
+                          </Grid>
+                          <Grid item xs={12}>
+                            <TextField label="Description" fullWidth multiline rows={2} value={ad.description} onChange={(e) => handleAddonChange(idx, 'description', e.target.value)} />
+                          </Grid>
+                        </Grid>
+                      </Card>
+                    ))}
+                    <Box mt={1}>
+                      <Button variant="contained" onClick={addAddonRow}>Add Add-on</Button>
+                    </Box>
+                  </Grid>
+                )}
               </Grid>
 
               <Box textAlign="center" mt={4}>
