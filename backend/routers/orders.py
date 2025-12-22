@@ -20,9 +20,39 @@ from schemas.order import (
     RevisionPublic,
     ReviewCreate,
     ReviewPublic,
+    PurchaseRevisionsRequest,
 )
 
 router = APIRouter(prefix="/orders", tags=["orders"])
+
+
+def _tier_included_revision_limit(package_tier: Optional[str]) -> Optional[int]:
+    """Return included revisions for a tier. None means unlimited."""
+    tier = (package_tier or "").strip().lower()
+    if tier == "basic":
+        return 1
+    if tier == "standard":
+        return 3
+    if tier == "premium":
+        return None
+    # If tier is unknown / missing, default to 1 to protect freelancers.
+    return 1
+
+
+def _revision_policy_fields(*, revision_count: int, included_revision_limit: Optional[int], extra_revisions_purchased: int):
+    if included_revision_limit is None:
+        return {
+            "revisions_unlimited": True,
+            "revisions_allowed": None,
+            "revisions_remaining": None,
+        }
+    allowed = max(0, included_revision_limit + (extra_revisions_purchased or 0))
+    remaining = max(0, allowed - (revision_count or 0))
+    return {
+        "revisions_unlimited": False,
+        "revisions_allowed": allowed,
+        "revisions_remaining": remaining,
+    }
 
 
 @router.post("", response_model=OrderPublic, status_code=201)
@@ -46,7 +76,7 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                 # Get service and freelancer
                 await cur.execute(
                     '''
-                    SELECT s.service_id, cs.freelancer_id
+                    SELECT s.service_id, cs.freelancer_id, s.package_tier
                     FROM "Service" s
                     JOIN create_service cs ON s.service_id = cs.service_id
                     WHERE s.service_id = %s
@@ -56,18 +86,20 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                 service_row = await cur.fetchone()
                 if not service_row:
                     raise HTTPException(status_code=404, detail="Service not found")
-                service_id, freelancer_id = service_row
+                service_id, freelancer_id, package_tier = service_row
+
+                included_revision_limit = _tier_included_revision_limit(package_tier)
 
                 # 1. Create base order
                 requirements_json = json.dumps(order.requirements) if order.requirements else None
                 req_hours = order.required_hours if getattr(order, 'required_hours', None) is not None else None
                 await cur.execute(
                     '''
-                    INSERT INTO "Order" (order_date, status, revision_count, total_price, review_given, requirements, required_hours)
-                    VALUES (NOW(), 'pending', 0, %s, FALSE, %s, %s)
+                    INSERT INTO "Order" (order_date, status, revision_count, included_revision_limit, extra_revisions_purchased, total_price, review_given, requirements, required_hours)
+                    VALUES (NOW(), 'pending', 0, %s, 0, %s, FALSE, %s, %s)
                     RETURNING order_id
                     ''',
-                    (order.total_price, requirements_json, req_hours),
+                    (included_revision_limit, order.total_price, requirements_json, req_hours),
                 )
                 order_id = (await cur.fetchone())[0]
 
@@ -127,6 +159,13 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                     order_date=datetime.now(),
                     status="pending",
                     revision_count=0,
+                    included_revision_limit=included_revision_limit,
+                    extra_revisions_purchased=0,
+                    **_revision_policy_fields(
+                        revision_count=0,
+                        included_revision_limit=included_revision_limit,
+                        extra_revisions_purchased=0,
+                    ),
                     total_price=order.total_price,
                     review_given=False,
                     service_id=service_id,
@@ -148,7 +187,7 @@ async def get_orders(user_id: int = Query(...)):
         async with conn.cursor() as cur:
             # Try as client
             query = '''
-                SELECT o.order_id, o.order_date, o.status, o.revision_count, o.total_price, o.review_given,
+                SELECT o.order_id, o.order_date, o.status, o.revision_count, o.included_revision_limit, o.extra_revisions_purchased, o.total_price, o.review_given,
                        mo.service_id, mo.client_id, fo.freelancer_id, o.required_hours, o.requirements
                 FROM "Order" o
                 JOIN make_order mo ON o.order_id = mo.order_id
@@ -161,7 +200,7 @@ async def get_orders(user_id: int = Query(...)):
 
             # Try as freelancer
             query_fl = '''
-                SELECT o.order_id, o.order_date, o.status, o.revision_count, o.total_price, o.review_given,
+                SELECT o.order_id, o.order_date, o.status, o.revision_count, o.included_revision_limit, o.extra_revisions_purchased, o.total_price, o.review_given,
                        mo.service_id, mo.client_id, fo.freelancer_id, o.required_hours, o.requirements
                 FROM "Order" o
                 JOIN make_order mo ON o.order_id = mo.order_id
@@ -187,13 +226,20 @@ async def get_orders(user_id: int = Query(...)):
                         order_date=row[1],
                         status=row[2],
                         revision_count=row[3],
-                        total_price=float(row[4]) if isinstance(row[4], Decimal) else row[4],
-                        review_given=row[5],
-                        service_id=row[6],
-                        client_id=row[7],
-                        freelancer_id=row[8],
-                        required_hours=row[9],
-                        requirements=_safe_json_load(row[10]),
+                        included_revision_limit=row[4],
+                        extra_revisions_purchased=row[5] or 0,
+                        **_revision_policy_fields(
+                            revision_count=row[3],
+                            included_revision_limit=row[4],
+                            extra_revisions_purchased=row[5] or 0,
+                        ),
+                        total_price=float(row[6]) if isinstance(row[6], Decimal) else row[6],
+                        review_given=row[7],
+                        service_id=row[8],
+                        client_id=row[9],
+                        freelancer_id=row[10],
+                        required_hours=row[11],
+                        requirements=_safe_json_load(row[12]),
                         addon_service_ids=addon_ids,
                     )
                 )
@@ -206,7 +252,7 @@ async def get_order_detail(order_id: int):
     async with get_connection() as conn:
         async with conn.cursor() as cur:
             query = '''
-                SELECT o.order_id, o.order_date, o.status, o.revision_count, o.total_price, o.review_given,
+                SELECT o.order_id, o.order_date, o.status, o.revision_count, o.included_revision_limit, o.extra_revisions_purchased, o.total_price, o.review_given,
                        mo.service_id, mo.client_id, fo.freelancer_id,
                        s.title, s.category,
                        na_fl.name AS freelancer_name,
@@ -236,20 +282,27 @@ async def get_order_detail(order_id: int):
                 order_date=row[1],
                 status=row[2],
                 revision_count=row[3],
-                total_price=float(row[4]) if isinstance(row[4], Decimal) else row[4],
-                review_given=row[5],
-                service_id=row[6],
-                client_id=row[7],
-                freelancer_id=row[8],
-                service_title=row[9],
-                service_category=row[10],
-                freelancer_name=row[11],
-                client_name=row[12],
-                is_big_order=row[13] is not None,
-                milestone_count=row[13],
-                current_phase=row[14],
-                required_hours=row[15],
-                requirements=_safe_json_load(row[16]),
+                included_revision_limit=row[4],
+                extra_revisions_purchased=row[5] or 0,
+                **_revision_policy_fields(
+                    revision_count=row[3],
+                    included_revision_limit=row[4],
+                    extra_revisions_purchased=row[5] or 0,
+                ),
+                total_price=float(row[6]) if isinstance(row[6], Decimal) else row[6],
+                review_given=row[7],
+                service_id=row[8],
+                client_id=row[9],
+                freelancer_id=row[10],
+                service_title=row[11],
+                service_category=row[12],
+                freelancer_name=row[13],
+                client_name=row[14],
+                is_big_order=row[15] is not None,
+                milestone_count=row[15],
+                current_phase=row[16],
+                required_hours=row[17],
+                requirements=_safe_json_load(row[18]),
                 addon_service_ids=addon_ids,
             )
 
@@ -334,21 +387,61 @@ async def request_revision(order_id: int, revision: RevisionCreate, client_id: i
     """Client requests a revision"""
     async with get_connection() as conn:
         async with conn.cursor() as cur:
-            # Verify order belongs to client
+            # Verify order belongs to client + fetch revision policy
             await cur.execute(
-                'SELECT client_id, revision_count, o.status FROM make_order mo JOIN "Order" o ON mo.order_id = o.order_id WHERE mo.order_id = %s',
+                '''
+                SELECT mo.client_id, o.revision_count, o.status, o.included_revision_limit, o.extra_revisions_purchased
+                FROM make_order mo
+                JOIN "Order" o ON mo.order_id = o.order_id
+                WHERE mo.order_id = %s
+                ''',
                 (order_id,),
             )
             row = await cur.fetchone()
-            if not row or row[0] != client_id:
+            if not row:
+                raise HTTPException(status_code=404, detail="Order not found")
+            if row[0] != client_id:
                 raise HTTPException(status_code=403, detail="Order does not belong to client")
 
+            revision_count, status, included_limit, extra_purchased = row[1], row[2], row[3], row[4] or 0
+
             # Disallow revisions on completed/cancelled orders
-            status = row[2]
             if status in ("completed", "cancelled"):
                 raise HTTPException(status_code=400, detail="Order is closed; revisions are not allowed")
 
-            revision_no = row[1] + 1
+            if included_limit is not None:
+                allowed_total = max(0, included_limit + extra_purchased)
+                if revision_count >= allowed_total:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "Revision limit reached for this order. "
+                            f"Included: {included_limit}, extra purchased: {extra_purchased}, used: {revision_count}. "
+                            "Purchase additional revisions to continue."
+                        ),
+                    )
+
+            # Concurrency-safe reservation of a revision number
+            await cur.execute(
+                '''
+                UPDATE "Order" o
+                SET status = %s,
+                    revision_count = revision_count + 1
+                WHERE o.order_id = %s
+                                    AND o.status NOT IN ('completed', 'cancelled')
+                  AND (o.included_revision_limit IS NULL OR o.revision_count < o.included_revision_limit + o.extra_revisions_purchased)
+                RETURNING o.revision_count
+                ''',
+                ("revision_requested", order_id),
+            )
+            updated = await cur.fetchone()
+            if not updated:
+                # Another request might have consumed the last allowed revision.
+                raise HTTPException(
+                    status_code=409,
+                    detail="Revision limit reached for this order. Purchase additional revisions to continue.",
+                )
+            revision_no = updated[0]
 
             # Insert revision
             await cur.execute(
@@ -363,11 +456,6 @@ async def request_revision(order_id: int, revision: RevisionCreate, client_id: i
                 (revision_id, client_id, order_id),
             )
 
-            # Update order status + count
-            await cur.execute(
-                'UPDATE "Order" SET status = %s, revision_count = revision_count + 1 WHERE order_id = %s',
-                ("revision_requested", order_id),
-            )
             await conn.commit()
 
             return RevisionPublic(
@@ -377,6 +465,40 @@ async def request_revision(order_id: int, revision: RevisionCreate, client_id: i
                 order_id=order_id,
                 client_id=client_id,
             )
+
+
+@router.post("/{order_id}/purchase-revisions", response_model=OrderDetail)
+async def purchase_additional_revisions(
+    order_id: int,
+    payload: PurchaseRevisionsRequest,
+    client_id: int = Query(...),
+):
+    """Client purchases additional revisions for an existing order."""
+    if payload.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be greater than 0")
+    if payload.quantity > 100:
+        raise HTTPException(status_code=400, detail="Quantity too large")
+
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                'SELECT client_id FROM make_order WHERE order_id = %s',
+                (order_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Order not found")
+            if row[0] != client_id:
+                raise HTTPException(status_code=403, detail="Order does not belong to client")
+
+            await cur.execute(
+                'UPDATE "Order" SET extra_revisions_purchased = extra_revisions_purchased + %s WHERE order_id = %s',
+                (payload.quantity, order_id),
+            )
+            await conn.commit()
+
+    # Return fresh order detail
+    return await get_order_detail(order_id)
 
 
 @router.patch("/{order_id}/complete")
