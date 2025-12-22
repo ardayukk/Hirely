@@ -44,3 +44,11 @@ class UserUpdate(BaseModel):
     age: Optional[int] = None
     display_name: Optional[str] = None
     tagline: Optional[str] = None
+
+
+class UserResponse(BaseModel):
+    user_id: int
+    id: Optional[int] = None
+    email: Optional[EmailStr] = None
+    role: Optional[str] = None
+    username: Optional[str] = None

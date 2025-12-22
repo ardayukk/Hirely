@@ -6,6 +6,7 @@ import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate 
 import { useAuth } from '../context/Authcontext'; // ✅ import your Auth hook (fixed relative path & filename case)
 import { MockApiProvider } from '../context/MockApiProvider';
 import Admin from '../pages/AdminDisputes';
+import Analytics from '../pages/Analytics';
 import Checkout from '../pages/Checkout';
 import ClientWorkspace from '../pages/Client';
 import CreateService from '../pages/CreateService';
@@ -88,6 +89,7 @@ function AppContent() {
                     <Route path="/services/:serviceId" element={requireAuth(<ServiceDetail />)} />
                     <Route path="/create-service" element={requireAuth(<CreateService />)} />
                     <Route path="/myServices" element={requireAuth(<MyServices />)} />
+                    <Route path="/analytics" element={requireAuth(<Analytics />)} />
                     <Route path="/logout" element={<Logout />} />
 
                     <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />

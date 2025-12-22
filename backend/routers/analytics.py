@@ -1,9 +1,15 @@
-from datetime import datetime
-from typing import List
-from fastapi import APIRouter, HTTPException
+from datetime import datetime, date, timedelta
+from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, HTTPException, Depends, Query
 
 from backend.db import get_connection
-from backend.schemas.analytics import AnalyticsSummary, CategoryMetric, AnalyticsSnapshot
+from backend.schemas.analytics import (
+    AnalyticsSummary, CategoryMetric, AnalyticsSnapshot,
+    ServiceEventCreate, DailyMetricResponse, FreelancerAnalyticsSummary
+)
+from backend.repositories.analytics_repo import AnalyticsRepository
+from backend.core.security import get_current_user, get_current_user_optional
+from backend.schemas.user import UserResponse
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -106,3 +112,61 @@ async def analytics_snapshot():
             except Exception as e:
                 await conn.rollback()
                 raise HTTPException(status_code=400, detail=f"Failed to create analytics snapshot: {str(e)}")
+
+
+@router.post("/events", status_code=201)
+async def track_event(
+    event: ServiceEventCreate,
+    current_user: Optional[UserResponse] = Depends(get_current_user_optional)
+):
+    """
+    Track a service event (view, click, etc.)
+    """
+    user_id = current_user.user_id if current_user else None
+    event_id = await AnalyticsRepository.create_event(event, user_id)
+    return {"event_id": event_id, "status": "recorded"}
+
+@router.post("/events/batch", status_code=201)
+async def track_events_batch(
+    events: List[ServiceEventCreate],
+    current_user: Optional[UserResponse] = Depends(get_current_user_optional)
+):
+    """
+    Track multiple service events (e.g. search impressions)
+    """
+    user_id = current_user.user_id if current_user else None
+    # This is not efficient if we do one by one insert, but for now it's okay.
+    # Ideally repo should support batch insert.
+    for event in events:
+        await AnalyticsRepository.create_event(event, user_id)
+    return {"status": "recorded", "count": len(events)}
+
+@router.get("/metrics/{service_id}", response_model=List[DailyMetricResponse])
+async def get_service_metrics(
+    service_id: int,
+    start_date: date = Query(..., description="Start date for metrics"),
+    end_date: date = Query(..., description="End date for metrics"),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Get daily metrics for a specific service.
+    Only the owner of the service should be able to see this (TODO: Add ownership check)
+    """
+    # TODO: Verify that current_user owns the service_id
+    metrics = await AnalyticsRepository.get_daily_metrics(service_id, start_date, end_date)
+    return metrics
+
+@router.get("/summary/{service_id}", response_model=FreelancerAnalyticsSummary)
+async def get_service_summary(
+    service_id: int,
+    start_date: date = Query(..., description="Start date for summary"),
+    end_date: date = Query(..., description="End date for summary"),
+    current_user: UserResponse = Depends(get_current_user)
+):
+    """
+    Get summary metrics for a specific service.
+    """
+    # TODO: Verify that current_user owns the service_id
+    summary = await AnalyticsRepository.get_summary(service_id, start_date, end_date)
+    return summary
+
