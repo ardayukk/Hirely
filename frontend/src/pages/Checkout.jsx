@@ -14,6 +14,7 @@ export default function Checkout() {
   const [milestoneCount, setMilestoneCount] = useState(3);
   const [requiredHours, setRequiredHours] = useState(1);
   const [requirements, setRequirements] = useState({});
+  const [selectedTier, setSelectedTier] = useState('Standard');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -24,6 +25,7 @@ export default function Checkout() {
       try {
         const res = await axiosInstance.get(`/api/services/${serviceId}`);
         setService(res.data);
+        if (res.data?.package_tier) setSelectedTier(res.data.package_tier);
       } catch (err) {
         console.error('Failed to load service', err);
         setError('Could not load service details');
@@ -69,7 +71,7 @@ export default function Checkout() {
         order_type: orderType,
         delivery_date: normalizedDelivery,
         milestone_count: orderType === 'big' ? normalizedMilestones : null,
-        requirements: requirements,
+        requirements: { ...requirements, selected_package_tier: selectedTier },
       };
 
       const res = await axiosInstance.post(`/api/orders?client_id=${user.id}`, payload);
@@ -120,6 +122,15 @@ export default function Checkout() {
             <Select value={orderType} onChange={(e) => setOrderType(e.target.value)} fullWidth>
               <MenuItem value="small">Small Order (Single Delivery)</MenuItem>
               <MenuItem value="big">Big Order (Milestones)</MenuItem>
+            </Select>
+          </Box>
+
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle1" gutterBottom>Package Tier</Typography>
+            <Select value={selectedTier} onChange={(e) => setSelectedTier(e.target.value)} fullWidth>
+              <MenuItem value="Basic">Basic</MenuItem>
+              <MenuItem value="Standard">Standard</MenuItem>
+              <MenuItem value="Premium">Premium</MenuItem>
             </Select>
           </Box>
 
