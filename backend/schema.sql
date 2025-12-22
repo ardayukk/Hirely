@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS "Order" (
     status TEXT DEFAULT 'pending',
     revision_count INTEGER DEFAULT 0,
     total_price DECIMAL(10, 2),
+    required_hours INTEGER,
     review_given BOOLEAN DEFAULT FALSE,
     report_id INTEGER,
     requirements TEXT,

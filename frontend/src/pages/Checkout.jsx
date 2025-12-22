@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Container, Grid, Box, Typography, Select, MenuItem, TextField, Button, Alert } from '@mui/material';
+import { Container, Grid, Box, Typography, Select, MenuItem, TextField, Button, Alert, Snackbar } from '@mui/material';
 import { axiosInstance, useAuth } from '../context/Authcontext';
 import RequirementsEditor from '../components/RequirementsEditor';
 
@@ -12,17 +12,22 @@ export default function Checkout() {
   const [orderType, setOrderType] = useState('small');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [milestoneCount, setMilestoneCount] = useState(3);
+  const [requiredHours, setRequiredHours] = useState(1);
   const [requirements, setRequirements] = useState({});
+  const [selectedTier, setSelectedTier] = useState('Standard');
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [totalPrice, setTotalPrice] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
   useEffect(() => {
     const fetchService = async () => {
       try {
         const res = await axiosInstance.get(`/api/services/${serviceId}`);
         setService(res.data);
+        if (res.data?.package_tier) setSelectedTier(res.data.package_tier);
       } catch (err) {
         console.error('Failed to load service', err);
         setError('Could not load service details');
@@ -54,15 +59,44 @@ export default function Checkout() {
       setError('');
 
       const normalizedDelivery = orderType === 'small' && deliveryDate ? deliveryDate : null;
-      const normalizedMilestones = orderType === 'big' && Number.isFinite(milestoneCount) ? milestoneCount : 3;
+      const normalizedMilestones = orderType === 'big' && Number.isFinite(Number(milestoneCount)) ? Math.max(2, Number(milestoneCount)) : 2;
+
+      // validate requiredHours and milestones
+      if (requiredHours === '' || Number.isNaN(Number(requiredHours)) || Number(requiredHours) < 1) {
+        setError('Please enter a valid number of required hours (>= 1).');
+        setLoading(false);
+        return;
+      }
+      if (orderType === 'big' && (milestoneCount === '' || Number.isNaN(Number(milestoneCount)) || Number(milestoneCount) < 2)) {
+        setError('Please enter a valid number of milestones (>= 2) for big orders.');
+        setLoading(false);
+        return;
+      }
+
+      let totalPrice = (service.hourly_price || 0) * Number(requiredHours);
+      if (orderType === 'big' && normalizedMilestones > 1) {
+        totalPrice *= normalizedMilestones;
+      }
+      
+      // compute hourly total including selected add-ons
+      const baseHourly = service.hourly_price || 0;
+      let addonsHourly = 0;
+      if (service.addons && service.addons.length && selectedAddons.length) {
+        addonsHourly = service.addons
+          .filter(a => selectedAddons.includes(a.service_id))
+          .reduce((s, a) => s + (a.hourly_price || 0), 0);
+      }
+      const hourlyTotal = baseHourly + addonsHourly;
+      const computedTotalPrice = hourlyTotal * Number(requiredHours) * (orderType === 'big' ? normalizedMilestones : 1);
 
       const payload = {
         service_id: parseInt(serviceId),
-        total_price: totalPrice || service.hourly_price || 100,
+        total_price: computedTotalPrice,
+        required_hours: Number(requiredHours),
         order_type: orderType,
         delivery_date: normalizedDelivery,
         milestone_count: orderType === 'big' ? normalizedMilestones : null,
-        requirements: requirements,
+        requirements: { ...requirements, selected_package_tier: selectedTier },
         addon_service_ids: selectedAddons,
       };
 
@@ -86,6 +120,15 @@ export default function Checkout() {
       </Container>
     );
   }
+
+  // display total: if big order, multiply required hours by milestone count
+  const displayNormalizedMilestones = orderType === 'big' && Number.isFinite(Number(milestoneCount)) ? Number(milestoneCount) : 1;
+  const displayHours = requiredHours === '' ? 0 : Number(requiredHours);
+  // compute display total using base hourly + selected add-ons
+  const addonsHourlyForDisplay = service && service.addons && selectedAddons.length
+    ? service.addons.filter(a => selectedAddons.includes(a.service_id)).reduce((s, a) => s + (a.hourly_price || 0), 0)
+    : 0;
+  const displayTotalPrice = ( (service.hourly_price || 0) + addonsHourlyForDisplay ) * displayHours * (orderType === 'big' ? displayNormalizedMilestones : 1);
 
   return (
     <Container sx={{ mt: 4 }}>
@@ -112,6 +155,35 @@ export default function Checkout() {
             </Select>
           </Box>
 
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle1" gutterBottom>Package Tier</Typography>
+            <Select value={selectedTier} onChange={(e) => setSelectedTier(e.target.value)} fullWidth>
+              <MenuItem value="Basic">Basic</MenuItem>
+              <MenuItem value="Standard">Standard</MenuItem>
+              <MenuItem value="Premium">Premium</MenuItem>
+            </Select>
+          </Box>
+
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle1" gutterBottom>Required Hours</Typography>
+            <TextField
+              type="number"
+              fullWidth
+              value={requiredHours}
+              onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '') {
+                    setRequiredHours('');
+                  } else {
+                    const n = parseInt(v, 10);
+                    setRequiredHours(Number.isFinite(n) ? n : '');
+                  }
+                }}
+              inputProps={{ min: 1, step: 1 }}
+              helperText="Estimate how many hours you need for this service"
+            />
+          </Box>
+
           {orderType === 'small' && (
             <Box sx={{ mt: 2 }}>
               <Typography variant="subtitle1" gutterBottom>Delivery Date</Typography>
@@ -132,8 +204,29 @@ export default function Checkout() {
                 type="number"
                 fullWidth
                 value={milestoneCount}
-                onChange={(e) => setMilestoneCount(parseInt(e.target.value))}
-                inputProps={{ min: 1, max: 10 }}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '') {
+                    setMilestoneCount('');
+                  } else {
+                    const n = parseInt(v, 10);
+                    setMilestoneCount(Number.isFinite(n) ? n : '');
+                  }
+                }}
+                onBlur={() => {
+                  const v = milestoneCount;
+                  const n = Number(v);
+                  if (orderType === 'big') {
+                    if (v === '' || Number.isNaN(n) || n < 2) {
+                      // auto-correct to minimum and notify user
+                      setMilestoneCount(2);
+                      setSnackbarMessage('Minimum 2 milestones required — set to 2');
+                      setSnackbarOpen(true);
+                    }
+                  }
+                }}
+                inputProps={{ min: 2, max: 10 }}
+                helperText="Minimum 2 milestones for big orders"
               />
             </Box>
           )}
@@ -147,8 +240,12 @@ export default function Checkout() {
           <Box sx={{ p: 3, border: '1px solid #e0e0e0', borderRadius: 2 }}>
             <Typography variant="h6" gutterBottom>Order Summary</Typography>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography>Service Price:</Typography>
-              <Typography>${service.hourly_price ? service.hourly_price.toFixed(2) : 'N/A'}</Typography>
+              <Typography>Hourly Rate:</Typography>
+              <Typography>${service.hourly_price ? service.hourly_price.toFixed(2) : '0.00'}/hr</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography>Required Hours:</Typography>
+              <Typography>{requiredHours}h</Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Typography>Type:</Typography>
@@ -183,7 +280,7 @@ export default function Checkout() {
             )}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', mt: 2, pt: 2, borderTop: '1px solid #e0e0e0' }}>
               <Typography>Total:</Typography>
-              <Typography>${(totalPrice || service.hourly_price || 0).toFixed(2)}</Typography>
+              <Typography>${displayTotalPrice.toFixed(2)}</Typography>
             </Box>
 
             <Button
@@ -198,6 +295,16 @@ export default function Checkout() {
           </Box>
         </Grid>
       </Grid>
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={null}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSnackbarOpen(false)} severity="warning" sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 }
