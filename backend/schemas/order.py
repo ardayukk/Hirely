@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
@@ -11,6 +11,9 @@ class OrderCreate(BaseModel):
     delivery_date: Optional[datetime] = None  # for small orders
     milestone_count: Optional[int] = None  # for big orders
     milestone_delivery_date: Optional[datetime] = None
+    requirements: Optional[Dict[str, Any]] = None
+    required_hours: Optional[int] = None
+    addon_service_ids: Optional[List[int]] = None
 
 
 class OrderPublic(BaseModel):
@@ -18,11 +21,19 @@ class OrderPublic(BaseModel):
     order_date: datetime
     status: str
     revision_count: int
+    included_revision_limit: Optional[int] = None
+    extra_revisions_purchased: int = 0
+    revisions_unlimited: bool = False
+    revisions_allowed: Optional[int] = None
+    revisions_remaining: Optional[int] = None
     total_price: float
     review_given: bool
     service_id: int
     client_id: int
     freelancer_id: Optional[int] = None
+    requirements: Optional[Dict[str, Any]] = None
+    required_hours: Optional[int] = None
+    addon_service_ids: Optional[List[int]] = None
 
 
 class OrderDetail(OrderPublic):
@@ -40,6 +51,12 @@ class RevisionCreate(BaseModel):
     revision_text: str
 
 
+class PurchaseRevisionsRequest(BaseModel):
+    quantity: int
+    payment_ref: Optional[str] = None
+    amount: Optional[float] = 0.0
+
+
 class RevisionPublic(BaseModel):
     revision_id: int
     revision_text: str
@@ -52,11 +69,13 @@ class ReviewCreate(BaseModel):
     """Client leaves a review after completion"""
     rating: int  # 1-5
     comment: Optional[str] = None
+    highlights: Optional[str] = None
 
 
 class ReviewPublic(BaseModel):
     review_id: int
     rating: int
     comment: Optional[str]
+    highlights: Optional[str]
     client_id: int
     service_id: int

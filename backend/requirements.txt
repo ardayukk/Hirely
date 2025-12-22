@@ -6,3 +6,4 @@ psycopg[binary]==3.2.3
 psycopg-pool==3.2.3
 passlib[bcrypt]==1.7.4
 email-validator==2.2.0
+python-multipart==0.0.9

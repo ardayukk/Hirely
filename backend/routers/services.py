@@ -6,13 +6,13 @@ from fastapi import APIRouter, HTTPException, Query
 from backend.db import get_connection
 from backend.schemas.service import (
     ServiceCreate,
-    ServiceUpdate,
     ServicePublic,
     ServiceDetail,
     FreelancerSummary,
     ReviewSummary,
     SampleWorkUpdate,
     AddOnCreate,
+    ServiceUpdate,
 )
 
 router = APIRouter(prefix="/services", tags=["services"])
@@ -30,26 +30,10 @@ async def create_service(service: ServiceCreate, freelancer_id: int = Query(...)
     """
     async with get_connection() as conn:
         async with conn.cursor() as cur:
-            # Ensure user exists; if not, 404
-            await cur.execute('SELECT user_id FROM "User" WHERE user_id = %s', (freelancer_id,))
-            if not await cur.fetchone():
-                raise HTTPException(status_code=404, detail="User not found")
-
-            # Ensure NonAdmin row exists (needed for Freelancer FK)
-            await cur.execute('SELECT user_id FROM "NonAdmin" WHERE user_id = %s', (freelancer_id,))
-            if not await cur.fetchone():
-                await cur.execute(
-                    'INSERT INTO "NonAdmin" (user_id, name, biography, wallet_balance) VALUES (%s, %s, %s, %s)',
-                    (freelancer_id, f"User {freelancer_id}", "", 0.0)
-                )
-
-            # Ensure Freelancer row exists
+            # Verify freelancer exists
             await cur.execute('SELECT user_id FROM "Freelancer" WHERE user_id = %s', (freelancer_id,))
             if not await cur.fetchone():
-                await cur.execute(
-                    'INSERT INTO "Freelancer" (user_id, tagline, avg_rating, total_orders, total_reviews) VALUES (%s, %s, %s, %s, %s)',
-                    (freelancer_id, "", 0.00, 0, 0)
-                )
+                raise HTTPException(status_code=404, detail="Freelancer not found")
 
             try:
                 # 1. Insert into Service
@@ -66,7 +50,7 @@ async def create_service(service: ServiceCreate, freelancer_id: int = Query(...)
                         service.delivery_time,
                         service.hourly_price,
                         service.package_tier,
-                        "active",
+                        "ACTIVE",
                         0.0,
                     ),
                 )
@@ -151,7 +135,7 @@ async def browse_services(
                   AND (%s::NUMERIC IS NULL OR s.hourly_price <= %s)
                   AND (%s::INTEGER IS NULL OR s.delivery_time <= %s)
                   AND (%s::NUMERIC IS NULL OR s.average_rating >= %s)
-                  AND s.status = 'active'
+                  AND s.status = 'ACTIVE'
             """
 
             # Dynamic ORDER BY
@@ -211,10 +195,12 @@ async def get_service_details(service_id: int):
                   s.service_id, s.title, s.category, s.description, s.delivery_time,
                   s.hourly_price, s.package_tier, s.status, s.average_rating,
                   f.user_id, f.tagline, f.avg_rating, f.total_orders, f.total_reviews,
-                  sw.sample_work
+                  sw.sample_work,
+                  na.name
                 FROM "Service" s
                 JOIN create_service cs ON s.service_id = cs.service_id
                 JOIN "Freelancer" f ON cs.freelancer_id = f.user_id
+                JOIN "NonAdmin" na ON f.user_id = na.user_id
                 LEFT JOIN "SampleWork" sw ON s.service_id = sw.service_id
                 WHERE s.service_id = %s
             """
@@ -227,11 +213,12 @@ async def get_service_details(service_id: int):
                 sid, title, category, description, delivery_time,
                 hourly_price, package_tier, status, average_rating,
                 freelancer_id, tagline, freelancer_rating, total_orders, total_reviews,
-                sample_work,
+                sample_work, freelancer_name
             ) = row
 
             freelancer = FreelancerSummary(
                 user_id=freelancer_id,
+                username=freelancer_name,
                 tagline=tagline,
                 avg_rating=float(freelancer_rating) if isinstance(freelancer_rating, Decimal) else freelancer_rating,
                 total_orders=total_orders,
@@ -418,74 +405,194 @@ async def get_freelancer_services(freelancer_id: int):
             return services
 
 
+# ============================================
+# SERVICE MANAGEMENT (Pause/Reactivate/Edit/Delete)
+# ============================================
+
 @router.patch("/{service_id}", response_model=ServicePublic)
-async def update_service(service_id: int, payload: ServiceUpdate, freelancer_id: int = Query(...)):
+async def edit_service(service_id: int, update: ServiceUpdate, freelancer_id: int = Query(...)):
     """
-    Update service fields if the requesting freelancer owns the service.
-    Editable fields: title, category, description, delivery_time, hourly_price, package_tier.
-    Also upserts sample_work when provided.
+    Edit service details (title, description, price, delivery time).
+    Only the freelancer who owns the service can edit it.
     """
     async with get_connection() as conn:
         async with conn.cursor() as cur:
-            # Verify ownership via create_service
+            # Verify ownership
             await cur.execute(
-                'SELECT 1 FROM create_service WHERE service_id = %s AND freelancer_id = %s',
+                'SELECT service_id FROM create_service WHERE service_id = %s AND freelancer_id = %s',
                 (service_id, freelancer_id),
             )
             if not await cur.fetchone():
-                raise HTTPException(status_code=403, detail="Not allowed to edit this service")
+                raise HTTPException(status_code=403, detail="Not authorized to edit this service")
 
-            # Build dynamic SET for Service columns
-            set_clauses = []
-            params = []
-            mapping = {
-                "title": payload.title,
-                "category": payload.category,
-                "description": payload.description,
-                "delivery_time": payload.delivery_time,
-                "hourly_price": payload.hourly_price,
-                "package_tier": payload.package_tier,
-            }
-            for column, value in mapping.items():
-                if value is not None:
-                    set_clauses.append(f'{column} = %s')
-                    params.append(value)
+            # Build dynamic UPDATE
+            updates = []
+            values = []
+            if update.title is not None:
+                updates.append("title = %s")
+                values.append(update.title)
+            if update.description is not None:
+                updates.append("description = %s")
+                values.append(update.description)
+            if update.delivery_time is not None:
+                updates.append("delivery_time = %s")
+                values.append(update.delivery_time)
+            if update.hourly_price is not None:
+                updates.append("hourly_price = %s")
+                values.append(update.hourly_price)
+            if update.package_tier is not None:
+                updates.append("package_tier = %s")
+                values.append(update.package_tier)
 
-            try:
-                if set_clauses:
-                    params.append(service_id)
-                    query = f'UPDATE "Service" SET {", ".join(set_clauses)} WHERE service_id = %s'
-                    await cur.execute(query, tuple(params))
-
-                # Upsert sample work if provided
-                if payload.sample_work is not None:
-                    await cur.execute(
-                        'INSERT INTO "SampleWork" (service_id, sample_work) VALUES (%s, %s)\n'
-                        'ON CONFLICT (service_id) DO UPDATE SET sample_work = EXCLUDED.sample_work',
-                        (service_id, payload.sample_work),
-                    )
-
-                await conn.commit()
-
-                # Return updated service
+            if not updates:
+                # No updates provided, just return current service
                 await cur.execute(
                     'SELECT service_id, title, category, description, delivery_time, hourly_price, package_tier, status, average_rating FROM "Service" WHERE service_id = %s',
                     (service_id,),
                 )
-                row = await cur.fetchone()
-                if not row:
-                    raise HTTPException(status_code=404, detail="Service not found")
-                return ServicePublic(
-                    service_id=row[0],
-                    title=row[1],
-                    category=row[2],
-                    description=row[3],
-                    delivery_time=row[4],
-                    hourly_price=float(row[5]) if isinstance(row[5], Decimal) else row[5],
-                    package_tier=row[6],
-                    status=row[7],
-                    average_rating=float(row[8]) if isinstance(row[8], Decimal) else row[8],
-                )
+            else:
+                query = f"UPDATE \"Service\" SET {', '.join(updates)} WHERE service_id = %s RETURNING service_id, title, category, description, delivery_time, hourly_price, package_tier, status, average_rating"
+                values.append(service_id)
+                await cur.execute(query, values)
+
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Service not found")
+
+            await conn.commit()
+            return ServicePublic(
+                service_id=row[0],
+                title=row[1],
+                category=row[2],
+                description=row[3],
+                delivery_time=row[4],
+                hourly_price=float(row[5]) if isinstance(row[5], Decimal) else row[5],
+                package_tier=row[6],
+                status=row[7],
+                average_rating=float(row[8]) if isinstance(row[8], Decimal) else row[8],
+            )
+
+
+@router.patch("/{service_id}/pause", response_model=ServicePublic)
+async def pause_service(service_id: int, freelancer_id: int = Query(...)):
+    """
+    Pause a service (hide it from client browse).
+    Only ACTIVE services can be paused.
+    Only the freelancer who owns the service can pause it.
+    """
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify ownership and status
+            await cur.execute(
+                'SELECT service_id FROM create_service WHERE service_id = %s AND freelancer_id = %s',
+                (service_id, freelancer_id),
+            )
+            if not await cur.fetchone():
+                raise HTTPException(status_code=403, detail="Not authorized to pause this service")
+
+            # Pause only if ACTIVE
+            await cur.execute(
+                """
+                UPDATE "Service"
+                SET status = 'PAUSED'
+                WHERE service_id = %s AND status = 'ACTIVE'
+                RETURNING service_id, title, category, description, delivery_time, hourly_price, package_tier, status, average_rating
+                """,
+                (service_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=400, detail="Service is not active or not found")
+
+            await conn.commit()
+            return ServicePublic(
+                service_id=row[0],
+                title=row[1],
+                category=row[2],
+                description=row[3],
+                delivery_time=row[4],
+                hourly_price=float(row[5]) if isinstance(row[5], Decimal) else row[5],
+                package_tier=row[6],
+                status=row[7],
+                average_rating=float(row[8]) if isinstance(row[8], Decimal) else row[8],
+            )
+
+
+@router.patch("/{service_id}/reactivate", response_model=ServicePublic)
+async def reactivate_service(service_id: int, freelancer_id: int = Query(...)):
+    """
+    Reactivate a paused service.
+    Only PAUSED services can be reactivated.
+    Only the freelancer who owns the service can reactivate it.
+    """
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify ownership and status
+            await cur.execute(
+                'SELECT service_id FROM create_service WHERE service_id = %s AND freelancer_id = %s',
+                (service_id, freelancer_id),
+            )
+            if not await cur.fetchone():
+                raise HTTPException(status_code=403, detail="Not authorized to reactivate this service")
+
+            # Reactivate only if PAUSED
+            await cur.execute(
+                """
+                UPDATE "Service"
+                SET status = 'ACTIVE'
+                WHERE service_id = %s AND status = 'PAUSED'
+                RETURNING service_id, title, category, description, delivery_time, hourly_price, package_tier, status, average_rating
+                """,
+                (service_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=400, detail="Service is not paused or not found")
+
+            await conn.commit()
+            return ServicePublic(
+                service_id=row[0],
+                title=row[1],
+                category=row[2],
+                description=row[3],
+                delivery_time=row[4],
+                hourly_price=float(row[5]) if isinstance(row[5], Decimal) else row[5],
+                package_tier=row[6],
+                status=row[7],
+                average_rating=float(row[8]) if isinstance(row[8], Decimal) else row[8],
+            )
+
+
+@router.delete("/{service_id}", status_code=204)
+async def delete_service(service_id: int, freelancer_id: int = Query(...)):
+    """Delete a service. Only the owner freelancer can delete their own service."""
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify the service belongs to the freelancer
+            await cur.execute(
+                'SELECT service_id FROM create_service WHERE service_id = %s AND freelancer_id = %s',
+                (service_id, freelancer_id),
+            )
+            if not await cur.fetchone():
+                raise HTTPException(status_code=404, detail="Service not found or you don't own this service")
+            
+            # Check if service has active orders
+            await cur.execute(
+                '''
+                SELECT COUNT(*) FROM make_order mo
+                JOIN "Order" o ON mo.order_id = o.order_id
+                WHERE mo.service_id = %s AND o.status IN ('pending', 'in_progress')
+                ''',
+                (service_id,),
+            )
+            active_orders = (await cur.fetchone())[0]
+            if active_orders > 0:
+                raise HTTPException(status_code=400, detail="Cannot delete service with active orders")
+            
+            try:
+                # Delete the service (cascade will handle related tables)
+                await cur.execute('DELETE FROM "Service" WHERE service_id = %s', (service_id,))
+                await conn.commit()
             except Exception as e:
                 await conn.rollback()
-                raise HTTPException(status_code=400, detail=f"Failed to update service: {str(e)}")
+                raise HTTPException(status_code=400, detail=f"Failed to delete service: {str(e)}")

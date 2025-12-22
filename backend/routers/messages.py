@@ -1,8 +1,12 @@
-from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from typing import List, Dict
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from pathlib import Path
+import shutil
 import uuid
+from datetime import datetime, timedelta
+import os
+from collections import defaultdict
+import asyncio
 
 from backend.db import get_connection
 from backend.schemas.message import (
@@ -14,9 +18,70 @@ from backend.schemas.message import (
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 
-# Base directory for uploaded files: backend/uploads/orders/{order_id}/{message_id}/
-BASE_UPLOAD_DIR = (Path(__file__).resolve().parent.parent / "uploads" / "orders")
-BASE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+# Rate limiting: In-memory store (user_id -> [timestamps])
+from typing import Union
+rate_limit_store: Dict[Union[str, int], List[datetime]] = {}
+RATE_LIMIT_WINDOW = 60  # seconds
+RATE_LIMIT_MAX_REQUESTS = 30  # max requests per window
+
+def check_rate_limit(user_id: int) -> bool:
+    """Check if user is within rate limits. Returns True if allowed, False if exceeded."""
+    now = datetime.now()
+    cutoff = now - timedelta(seconds=RATE_LIMIT_WINDOW)
+    
+    # Clean old timestamps
+    if user_id not in rate_limit_store:
+        rate_limit_store[user_id] = []
+    
+    rate_limit_store[user_id] = [ts for ts in rate_limit_store[user_id] if ts > cutoff]
+    
+    # Check limit
+    if len(rate_limit_store[user_id]) >= RATE_LIMIT_MAX_REQUESTS:
+        return False
+    
+    # Add current timestamp
+    rate_limit_store[user_id].append(now)
+    return True
+
+async def verify_order_participant(cur, order_id: int, user_id: int) -> tuple:
+    """Verify user is participant in order and return (client_id, freelancer_id)."""
+    client_id, freelancer_id = await _get_pair_by_order(cur, order_id)
+    if user_id not in (client_id, freelancer_id):
+        raise HTTPException(status_code=403, detail="Access denied: not a participant in this order")
+    return client_id, freelancer_id
+
+# WebSocket Connection Manager
+class ConnectionManager:
+    def __init__(self):
+        # Dict[order_id, Dict[user_id, WebSocket]]
+        self.active_connections: Dict[int, Dict[int, WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, order_id: int, user_id: int):
+        await websocket.accept()
+        if order_id not in self.active_connections:
+            self.active_connections[order_id] = {}
+        self.active_connections[order_id][user_id] = websocket
+
+    def disconnect(self, order_id: int, user_id: int):
+        if order_id in self.active_connections:
+            self.active_connections[order_id].pop(user_id, None)
+            if not self.active_connections[order_id]:
+                del self.active_connections[order_id]
+
+    async def broadcast_to_order(self, order_id: int, message: dict, exclude_user: int | None = None):
+        if order_id in self.active_connections:
+            for user_id, connection in list(self.active_connections[order_id].items()):
+                if exclude_user is None or user_id != exclude_user:
+                    try:
+                        await connection.send_json(message)
+                    except:
+                        self.disconnect(order_id, user_id)
+
+manager = ConnectionManager()
+
+# File upload directory
+UPLOAD_DIR = Path("backend/uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 async def _get_pair_by_order(cur, order_id: int):
@@ -37,13 +102,25 @@ async def _get_pair_by_order(cur, order_id: int):
 
 @router.post("", response_model=MessagePublic, status_code=201)
 async def send_message(payload: MessageCreate, sender_id: int = Query(...)):
+    # Rate limiting check
+    if not check_rate_limit(sender_id):
+        raise HTTPException(
+            status_code=429, 
+            detail=f"Rate limit exceeded: max {RATE_LIMIT_MAX_REQUESTS} messages per {RATE_LIMIT_WINDOW} seconds"
+        )
+    
+    # Validate message text length
+    if not payload.message_text or len(payload.message_text.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Message text cannot be empty")
+    
+    if len(payload.message_text) > 5000:
+        raise HTTPException(status_code=400, detail="Message text too long (max 5000 characters)")
+    
     async with get_connection() as conn:
         async with conn.cursor() as cur:
             try:
-                client_id, freelancer_id = await _get_pair_by_order(cur, payload.order_id)
-
-                if sender_id not in (client_id, freelancer_id):
-                    raise HTTPException(status_code=403, detail="User not part of this order")
+                # Verify permissions
+                client_id, freelancer_id = await verify_order_participant(cur, payload.order_id, sender_id)
 
                 receiver_id = freelancer_id if sender_id == client_id else client_id
 
@@ -78,7 +155,34 @@ async def send_message(payload: MessageCreate, sender_id: int = Query(...)):
                     )
                     file_id = (await cur.fetchone())[0]
 
+                # Insert notification for receiver
+                await cur.execute(
+                    '''
+                    INSERT INTO "Notification" (user_id, type, message, date_sent, is_read)
+                    VALUES (%s, %s, %s, NOW(), FALSE)
+                    ''',
+                    (receiver_id, 'new_message', f'New message in order #{payload.order_id}'),
+                )
+                
                 await conn.commit()
+                
+                # Broadcast to WebSocket connections
+                await manager.broadcast_to_order(payload.order_id, {
+                    "type": "new_message",
+                    "message": {
+                        "message_id": message_id,
+                        "sender_id": sender_id,
+                        "receiver_id": receiver_id,
+                        "message_text": payload.message_text,
+                        "timestamp": ts.isoformat(),
+                        "is_read": False,
+                        "reply_to_id": payload.reply_to_id,
+                        "file_id": file_id,
+                        "file_name": file_name,
+                        "file_path": file_path,
+                        "file_type": file_type,
+                    }
+                })
 
                 return MessagePublic(
                     message_id=message_id,
@@ -101,123 +205,185 @@ async def send_message(payload: MessageCreate, sender_id: int = Query(...)):
                 raise HTTPException(status_code=400, detail=f"Failed to send message: {str(e)}")
 
 
-@router.post("/upload", response_model=MessagePublic, status_code=201)
-async def upload_message_file(
-    sender_id: int = Query(...),
-    order_id: int = Form(...),
-    message_text: str = Form(""),
-    reply_to_id: Optional[int] = Form(None),
-    file: UploadFile = File(...),
-):
+@router.websocket("/ws/{order_id}")
+async def websocket_endpoint(websocket: WebSocket, order_id: int, user_id: int = Query(...)):
+    """WebSocket endpoint for real-time messaging within an order conversation."""
     async with get_connection() as conn:
         async with conn.cursor() as cur:
             try:
-                # Determine client/freelancer pair for the order
-                client_id, freelancer_id = await _get_pair_by_order(cur, order_id)
+                # Verify user is part of the order
+                client_id, freelancer_id = await verify_order_participant(cur, order_id, user_id)
 
-                if sender_id not in (client_id, freelancer_id):
-                    raise HTTPException(status_code=403, detail="User not part of this order")
+                await manager.connect(websocket, order_id, user_id)
+                
+                try:
+                    while True:
+                        # Keep connection alive and listen for messages
+                        data = await websocket.receive_json()
+                        
+                        # Handle incoming message - save to DB and broadcast
+                        if data.get("type") == "message":
+                            # Rate limiting for WebSocket messages
+                            if not check_rate_limit(user_id):
+                                await websocket.send_json({
+                                    "type": "error",
+                                    "message": f"Rate limit exceeded: max {RATE_LIMIT_MAX_REQUESTS} messages per {RATE_LIMIT_WINDOW} seconds"
+                                })
+                                continue
+                            
+                            message_text = data.get("message_text", "").strip()
+                            if not message_text:
+                                await websocket.send_json({"type": "error", "message": "Message text cannot be empty"})
+                                continue
+                            
+                            if len(message_text) > 5000:
+                                await websocket.send_json({"type": "error", "message": "Message text too long (max 5000 characters)"})
+                                continue
+                            
+                            receiver_id = freelancer_id if user_id == client_id else client_id
+                            
+                            await cur.execute(
+                                '''
+                                INSERT INTO "Messages" (sender_id, receiver_id, reply_to_id, message_text, timestamp, is_read)
+                                VALUES (%s, %s, %s, %s, NOW(), FALSE)
+                                RETURNING message_id, timestamp
+                                ''',
+                                (user_id, receiver_id, data.get("reply_to_id"), data.get("message_text")),
+                            )
+                            message_row = await cur.fetchone()
+                            message_id, ts = message_row[0], message_row[1]
 
-                receiver_id = freelancer_id if sender_id == client_id else client_id
-
-                # Create the message row
-                await cur.execute(
-                    '''
-                    INSERT INTO "Messages" (sender_id, receiver_id, reply_to_id, message_text, timestamp, is_read)
-                    VALUES (%s, %s, %s, %s, NOW(), FALSE)
-                    RETURNING message_id, timestamp
-                    ''',
-                    (sender_id, receiver_id, reply_to_id, message_text),
-                )
-                message_row = await cur.fetchone()
-                message_id, ts = message_row[0], message_row[1]
-
-                # Link message for conversation queries
-                await cur.execute(
-                    'INSERT INTO "Send_Message" (client_id, freelancer_id, message_id) VALUES (%s, %s, %s)',
-                    (client_id, freelancer_id, message_id),
-                )
-                await cur.execute(
-                    'INSERT INTO "Receive_Message" (client_id, freelancer_id, message_id) VALUES (%s, %s, %s)',
-                    (client_id, freelancer_id, message_id),
-                )
-
-                # Save file to disk
-                original_name = file.filename or "uploaded_file"
-                # Preserve extension when generating a unique storage name
-                ext = ''.join(Path(original_name).suffixes)
-                safe_name = f"{uuid.uuid4().hex}{ext}"
-                order_dir = BASE_UPLOAD_DIR / str(order_id) / str(message_id)
-                order_dir.mkdir(parents=True, exist_ok=True)
-                storage_path = order_dir / safe_name
-                content = await file.read()
-                storage_path.write_bytes(content)
-
-                file_type = file.content_type
-                # Store relative path from backend root for portability
-                relative_path = str(storage_path.relative_to(Path(__file__).resolve().parent.parent))
-
-                await cur.execute(
-                    'INSERT INTO "File" (message_id, file_name, file_path, upload_date, file_type) VALUES (%s, %s, %s, NOW(), %s) RETURNING file_id',
-                    (message_id, original_name, relative_path, file_type),
-                )
-                file_id = (await cur.fetchone())[0]
-
-                await conn.commit()
-
-                return MessagePublic(
-                    message_id=message_id,
-                    sender_id=sender_id,
-                    receiver_id=receiver_id,
-                    message_text=message_text,
-                    timestamp=ts,
-                    is_read=False,
-                    reply_to_id=reply_to_id,
-                    file_id=file_id,
-                    file_name=original_name,
-                    file_path=relative_path,
-                    file_type=file_type,
-                )
-            except HTTPException:
-                await conn.rollback()
-                raise
+                            await cur.execute(
+                                'INSERT INTO "Send_Message" (client_id, freelancer_id, message_id) VALUES (%s, %s, %s)',
+                                (client_id, freelancer_id, message_id),
+                            )
+                            await cur.execute(
+                                'INSERT INTO "Receive_Message" (client_id, freelancer_id, message_id) VALUES (%s, %s, %s)',
+                                (client_id, freelancer_id, message_id),
+                            )
+                            
+                            # Insert notification for receiver
+                            await cur.execute(
+                                '''
+                                INSERT INTO "Notification" (user_id, type, message, date_sent, is_read)
+                                VALUES (%s, %s, %s, NOW(), FALSE)
+                                ''',
+                                (receiver_id, 'new_message', f'New message in order #{order_id}'),
+                            )
+                            
+                            await conn.commit()
+                            
+                            # Broadcast to all connected users in this order
+                            await manager.broadcast_to_order(order_id, {
+                                "type": "new_message",
+                                "message": {
+                                    "message_id": message_id,
+                                    "sender_id": user_id,
+                                    "receiver_id": receiver_id,
+                                    "message_text": data.get("message_text"),
+                                    "timestamp": ts.isoformat(),
+                                    "is_read": False,
+                                    "reply_to_id": data.get("reply_to_id"),
+                                }
+                            })
+                            
+                except WebSocketDisconnect:
+                    manager.disconnect(order_id, user_id)
             except Exception as e:
-                await conn.rollback()
-                raise HTTPException(status_code=400, detail=f"Failed to upload file: {str(e)}")
+                await websocket.close(code=1011, reason=str(e))
 
 
-@router.get("/files/{file_id}")
-async def download_file(file_id: int):
+@router.post("/upload", status_code=201)
+async def upload_file(
+    file: UploadFile = File(...),
+    order_id: int = Form(...),
+    user_id: int = Form(...)
+):
+    """Upload a file attachment for messaging. Returns file metadata to be included in message."""
+    # Rate limiting for file uploads (stricter limit)
+    rate_limit_store_key = f"upload_{user_id}"
+    now = datetime.now()
+    cutoff = now - timedelta(seconds=300)  # 5 minute window for uploads
+    
+    if rate_limit_store_key not in rate_limit_store:
+        rate_limit_store[rate_limit_store_key] = []
+    
+    upload_timestamps = [ts for ts in rate_limit_store[rate_limit_store_key] if ts > cutoff]
+    
+    if len(upload_timestamps) >= 10:  # Max 10 uploads per 5 minutes
+        raise HTTPException(status_code=429, detail="Upload rate limit exceeded: max 10 files per 5 minutes")
+    
+    rate_limit_store[rate_limit_store_key] = upload_timestamps + [now]
+    
     async with get_connection() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(
-                'SELECT file_name, file_path, file_type FROM "File" WHERE file_id = %s',
-                (file_id,),
-            )
-            row = await cur.fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="File not found")
-            file_name, file_path, file_type = row[0], row[1], row[2]
-
-            abs_base = Path(__file__).resolve().parent.parent
-            abs_path = (abs_base / file_path).resolve()
-            if not abs_path.exists():
-                raise HTTPException(status_code=404, detail="File content missing")
-
-            return FileResponse(
-                path=str(abs_path),
-                media_type=file_type or 'application/octet-stream',
-                filename=file_name,
-            )
+            # Verify user is part of the order
+            try:
+                await verify_order_participant(cur, order_id, user_id)
+            except HTTPException:
+                raise
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=str(e))
+    
+    # Validate file
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+    
+    # Size limit: 10MB
+    MAX_FILE_SIZE = 10 * 1024 * 1024
+    file.file.seek(0, 2)  # Seek to end
+    file_size = file.file.tell()
+    file.file.seek(0)  # Reset to beginning
+    
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+    
+    # Allowed MIME types
+    ALLOWED_TYPES = [
+        "image/jpeg", "image/png", "image/gif", "image/webp",
+        "application/pdf", "text/plain",
+        "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/zip", "application/x-zip-compressed"
+    ]
+    
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail=f"File type {file.content_type} not allowed")
+    
+    # Create order-specific directory
+    order_dir = UPLOAD_DIR / f"order_{order_id}"
+    order_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Generate unique filename
+    file_ext = Path(file.filename).suffix
+    unique_filename = f"{uuid.uuid4()}{file_ext}"
+    file_path = order_dir / unique_filename
+    
+    # Save file
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+    
+    # Return file metadata (relative path from backend/)
+    relative_path = f"uploads/order_{order_id}/{unique_filename}"
+    
+    return {
+        "file_name": file.filename,
+        "file_path": relative_path,
+        "file_type": file.content_type,
+        "file_size": file_size,
+        "uploaded_at": datetime.now().isoformat()
+    }
 
 
 @router.get("", response_model=List[ConversationMessage])
 async def get_conversation(order_id: int = Query(...), user_id: int = Query(...)):
     async with get_connection() as conn:
         async with conn.cursor() as cur:
-            client_id, freelancer_id = await _get_pair_by_order(cur, order_id)
-            if user_id not in (client_id, freelancer_id):
-                raise HTTPException(status_code=403, detail="User not part of this order")
+            # Verify permissions
+            client_id, freelancer_id = await verify_order_participant(cur, order_id, user_id)
 
             await cur.execute(
                 '''

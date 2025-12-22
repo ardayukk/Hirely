@@ -1,28 +1,30 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.routers import health, jobs, db_test, auth, users, services, orders, messages, disputes, analytics, notifications, deliverables, workdone, reports
-from backend.db import init_pool, close_pool
+from backend.routers import (
+    health,
+    jobs,
+    db_test,
+    auth,
+    users,
+    services,
+    orders,
+    messages,
+    disputes,
+    analytics,
+)
 
+# Hirely API
 app = FastAPI(title="Hirely API", version="0.1.0")
 
-# CORS for local dev (Vite default port 5173)
+# CORS for local dev (allow all localhost ports for development)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Initialize and close connection pool
-@app.on_event("startup")
-async def startup():
-    await init_pool()
-
-@app.on_event("shutdown")
-async def shutdown():
-    await close_pool()
 
 # Routers
 app.include_router(health.router, prefix="/api")
@@ -35,10 +37,6 @@ app.include_router(orders.router, prefix="/api")
 app.include_router(messages.router, prefix="/api")
 app.include_router(disputes.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
-app.include_router(notifications.router, prefix="/api")
-app.include_router(deliverables.router, prefix="/api")
-app.include_router(workdone.router, prefix="/api")
-app.include_router(reports.router, prefix="/api")
 
 @app.get("/")
 def root():

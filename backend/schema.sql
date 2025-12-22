@@ -73,8 +73,10 @@ CREATE TABLE IF NOT EXISTS "Service" (
     delivery_time INTEGER,
     hourly_price DECIMAL(10, 2),
     package_tier TEXT,
-    status TEXT DEFAULT 'active',
-    average_rating DECIMAL(3, 2) DEFAULT 0.00
+    revision_limit INTEGER DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'PAUSED')),
+    average_rating DECIMAL(3, 2) DEFAULT 0.00,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS "SampleWork" (
@@ -87,6 +89,7 @@ CREATE TABLE IF NOT EXISTS "Review" (
     review_id SERIAL PRIMARY KEY,
     rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
     comment TEXT,
+    highlights TEXT,
     client_id INTEGER NOT NULL,
     FOREIGN KEY (client_id) REFERENCES "Client"(user_id) ON DELETE CASCADE
 );
@@ -98,7 +101,8 @@ CREATE TABLE IF NOT EXISTS "Review" (
 CREATE TABLE IF NOT EXISTS "Payment" (
     payment_id SERIAL PRIMARY KEY,
     amount DECIMAL(10, 2) NOT NULL,
-    payment_date TIMESTAMPTZ DEFAULT NOW()
+    payment_date TIMESTAMPTZ DEFAULT NOW(),
+    released BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS "AnalyticsReport" (
@@ -114,9 +118,13 @@ CREATE TABLE IF NOT EXISTS "Order" (
     order_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     status TEXT DEFAULT 'pending',
     revision_count INTEGER DEFAULT 0,
+    included_revision_limit INTEGER DEFAULT 1,
+    extra_revisions_purchased INTEGER NOT NULL DEFAULT 0 CHECK (extra_revisions_purchased >= 0),
     total_price DECIMAL(10, 2),
+    required_hours INTEGER,
     review_given BOOLEAN DEFAULT FALSE,
     report_id INTEGER,
+    requirements TEXT,
     FOREIGN KEY (report_id) REFERENCES "AnalyticsReport"(report_id) ON DELETE SET NULL
 );
 
@@ -152,6 +160,16 @@ CREATE TABLE IF NOT EXISTS "Revision" (
     revision_id SERIAL PRIMARY KEY,
     revision_text TEXT,
     revision_no INTEGER DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS "RevisionPurchase" (
+    purchase_id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    purchased_revisions INTEGER NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    payment_ref TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE
 );
 
 -- ============================================
@@ -297,6 +315,15 @@ CREATE TABLE IF NOT EXISTS "add_on" (
     CHECK (service_id1 < service_id2)
 );
 
+-- order_addon: selected add-ons per order
+CREATE TABLE IF NOT EXISTS order_addon (
+    order_id INTEGER NOT NULL,
+    addon_service_id INTEGER NOT NULL,
+    PRIMARY KEY (order_id, addon_service_id),
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
+    FOREIGN KEY (addon_service_id) REFERENCES "Service"(service_id) ON DELETE CASCADE
+);
+
 -- Update_Rating: Links Review, Freelancer
 CREATE TABLE IF NOT EXISTS "Update_Rating" (
     review_id INTEGER NOT NULL,
@@ -339,13 +366,13 @@ CREATE TABLE IF NOT EXISTS "WorkDone" (
 -- INDICES (for performance)
 -- ============================================
 
-CREATE INDEX idx_user_email ON "User"(email);
-CREATE INDEX idx_notification_user ON "Notification"(user_id);
-CREATE INDEX idx_service_category ON "Service"(category);
-CREATE INDEX idx_order_date ON "Order"(order_date);
-CREATE INDEX idx_messages_sender ON "Messages"(sender_id);
-CREATE INDEX idx_messages_receiver ON "Messages"(receiver_id);
-CREATE INDEX idx_review_client ON "Review"(client_id);
+CREATE INDEX IF NOT EXISTS idx_user_email ON "User"(email);
+CREATE INDEX IF NOT EXISTS idx_notification_user ON "Notification"(user_id);
+CREATE INDEX IF NOT EXISTS idx_service_category ON "Service"(category);
+CREATE INDEX IF NOT EXISTS idx_order_date ON "Order"(order_date);
+CREATE INDEX IF NOT EXISTS idx_messages_sender ON "Messages"(sender_id);
+CREATE INDEX IF NOT EXISTS idx_messages_receiver ON "Messages"(receiver_id);
+CREATE INDEX IF NOT EXISTS idx_review_client ON "Review"(client_id);
 
 -- Allow reported.admin_id to be nullable (admin can be assigned later)
 DO $$
@@ -431,6 +458,100 @@ EXECUTE FUNCTION update_freelancer_rating();
 -- ============================================
 -- When schema changes after initial creation, we drop and recreate affected tables with raw SQL.
 -- This complies with CS353: no ORM, no migration framework, all raw SQL.
+
+-- ============================================
+-- IDPOTENT MIGRATIONS (ALTER for existing DBs)
+-- ============================================
+
+DO $$
+BEGIN
+    -- Ensure revision policy columns exist on Order.
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Order' AND column_name = 'required_hours'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Order" ADD COLUMN required_hours INTEGER';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Order' AND column_name = 'requirements'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Order" ADD COLUMN requirements TEXT';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Order' AND column_name = 'included_revision_limit'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Order" ADD COLUMN included_revision_limit INTEGER';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Order' AND column_name = 'extra_revisions_purchased'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Order" ADD COLUMN extra_revisions_purchased INTEGER';
+    END IF;
+
+    -- Defaults / backfill for existing rows.
+    EXECUTE 'UPDATE "Order" SET extra_revisions_purchased = COALESCE(extra_revisions_purchased, 0)';
+
+    -- Backfill included_revision_limit using service.package_tier when possible.
+    -- Premium -> NULL (unlimited), Standard -> 3, Basic/unknown -> 1
+    EXECUTE '
+        UPDATE "Order" o
+        SET included_revision_limit = CASE LOWER(COALESCE(s.package_tier, ''''))
+            WHEN ''premium'' THEN NULL
+            WHEN ''standard'' THEN 3
+            WHEN ''basic'' THEN 1
+            ELSE 1
+        END
+        FROM make_order mo
+        JOIN "Service" s ON mo.service_id = s.service_id
+        WHERE mo.order_id = o.order_id
+          AND o.included_revision_limit IS NULL
+    ';
+
+        -- Any remaining NULL (e.g. orphaned rows) default to 1, BUT keep Premium as NULL (unlimited).
+        EXECUTE '
+                UPDATE "Order" o
+                SET included_revision_limit = 1
+                WHERE o.included_revision_limit IS NULL
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM make_order mo
+                        JOIN "Service" s ON mo.service_id = s.service_id
+                        WHERE mo.order_id = o.order_id
+                            AND LOWER(COALESCE(s.package_tier, '''')) = ''premium''
+                    )
+        ';
+
+    -- Add non-negative constraint for extra_revisions_purchased if missing.
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'order_extra_revisions_purchased_nonneg'
+    ) THEN
+        BEGIN
+            EXECUTE 'ALTER TABLE "Order" ADD CONSTRAINT order_extra_revisions_purchased_nonneg CHECK (extra_revisions_purchased >= 0)';
+        EXCEPTION WHEN others THEN
+            NULL;
+        END;
+    END IF;
+
+    -- Set default values going forward.
+    BEGIN
+        EXECUTE 'ALTER TABLE "Order" ALTER COLUMN extra_revisions_purchased SET DEFAULT 0';
+    EXCEPTION WHEN others THEN
+        NULL;
+    END;
+
+    BEGIN
+        EXECUTE 'ALTER TABLE "Order" ALTER COLUMN included_revision_limit SET DEFAULT 1';
+    EXCEPTION WHEN others THEN
+        NULL;
+    END;
+END $$;
 
 DROP TABLE IF EXISTS "reported" CASCADE;
 
