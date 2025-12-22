@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS "Review" (
     review_id SERIAL PRIMARY KEY,
     rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
     comment TEXT,
+    highlights TEXT,
     client_id INTEGER NOT NULL,
     FOREIGN KEY (client_id) REFERENCES "Client"(user_id) ON DELETE CASCADE
 );

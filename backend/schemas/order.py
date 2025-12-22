@@ -58,11 +58,13 @@ class ReviewCreate(BaseModel):
     """Client leaves a review after completion"""
     rating: int  # 1-5
     comment: Optional[str] = None
+    highlights: Optional[str] = None
 
 
 class ReviewPublic(BaseModel):
     review_id: int
     rating: int
     comment: Optional[str]
+    highlights: Optional[str]
     client_id: int
     service_id: int

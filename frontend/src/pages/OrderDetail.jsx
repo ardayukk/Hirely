@@ -1,5 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Typography, Box, Paper, Divider, Button, Chip, Grid, Alert, CircularProgress } from '@mui/material';
+import {
+  Container,
+  Typography,
+  Box,
+  Paper,
+  Divider,
+  Button,
+  Chip,
+  Grid,
+  Alert,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Rating,
+} from '@mui/material';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { axiosInstance, useAuth } from '../context/Authcontext';
 import ChatComposer from '../components/ChatComposer';
@@ -20,6 +37,9 @@ export default function OrderDetail() {
   const [disputeLoading, setDisputeLoading] = useState(false);
   const [disputeError, setDisputeError] = useState('');
   const [addonDetails, setAddonDetails] = useState([]);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewData, setReviewData] = useState({ rating: 5, comment: '', highlights: '' });
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
     fetchOrder();
@@ -115,11 +135,39 @@ export default function OrderDetail() {
     }
   };
 
+  const openReviewDialog = () => {
+    setReviewData({ rating: 5, comment: '', highlights: '' });
+    setReviewDialogOpen(true);
+  };
+
+  const handleSubmitReview = async () => {
+    if (reviewData.rating < 1 || reviewData.rating > 5) {
+      alert('Please select a rating between 1 and 5');
+      return;
+    }
+    try {
+      setSubmittingReview(true);
+      await axiosInstance.post(`/api/orders/${orderId}/review?client_id=${user.id}`, {
+        rating: reviewData.rating,
+        comment: reviewData.comment || null,
+        highlights: reviewData.highlights || null,
+      });
+      await fetchOrder();
+      setReviewDialogOpen(false);
+      alert('Review submitted. Thank you!');
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
   const handleComplete = async () => {
     try {
       await axiosInstance.patch(`/api/orders/${orderId}/complete?client_id=${user.id}`);
       await fetchOrder();
       alert('Payment released to freelancer. Order completed.');
+      openReviewDialog();
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to approve and release payment');
     }
@@ -150,26 +198,6 @@ export default function OrderDetail() {
     }
   };
 
-  const handleLeaveReview = async () => {
-    const ratingStr = prompt('Rating (1-5):');
-    if (!ratingStr) return;
-    const rating = parseInt(ratingStr);
-    if (rating < 1 || rating > 5) {
-      alert('Rating must be between 1 and 5');
-      return;
-    }
-    const comment = prompt('Comment (optional):');
-    try {
-      await axiosInstance.post(`/api/orders/${orderId}/review?client_id=${user.id}`, {
-        rating,
-        comment,
-      });
-      await fetchOrder();
-      alert('Review submitted');
-    } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to submit review');
-    }
-  };
 
   const handleOpenDispute = async () => {
     const reason = prompt('Describe the issue (optional):');
@@ -319,8 +347,8 @@ export default function OrderDetail() {
             )}
 
             {isClient && order.status === 'completed' && !order.review_given && (
-              <Button fullWidth variant="contained" sx={{ mb: 1 }} onClick={handleLeaveReview}>
-                Leave Review
+              <Button fullWidth variant="contained" sx={{ mb: 1 }} onClick={openReviewDialog}>
+                Leave Rating & Review
               </Button>
             )}
 
@@ -418,6 +446,56 @@ export default function OrderDetail() {
           )}
         </Grid>
       </Grid>
+
+      {/* Review Dialog */}
+      <Dialog open={reviewDialogOpen} onClose={() => setReviewDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Leave a Rating & Review</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Box>
+              <Typography component="legend" gutterBottom>Rating</Typography>
+              <Rating
+                name="rating"
+                value={reviewData.rating}
+                onChange={(event, newValue) => {
+                  setReviewData({ ...reviewData, rating: newValue || 1 });
+                }}
+                size="large"
+              />
+            </Box>
+            <TextField
+              label="Review Comment"
+              multiline
+              rows={4}
+              value={reviewData.comment}
+              onChange={(e) => setReviewData({ ...reviewData, comment: e.target.value })}
+              fullWidth
+              placeholder="Share your experience with this order..."
+            />
+            <TextField
+              label="Highlights (Optional)"
+              multiline
+              rows={2}
+              value={reviewData.highlights}
+              onChange={(e) => setReviewData({ ...reviewData, highlights: e.target.value })}
+              fullWidth
+              placeholder="Any specific highlights or notable aspects?"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReviewDialogOpen(false)} disabled={submittingReview}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSubmitReview} 
+            variant="contained" 
+            disabled={submittingReview || !reviewData.rating}
+          >
+            {submittingReview ? 'Submitting...' : 'Submit Review'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

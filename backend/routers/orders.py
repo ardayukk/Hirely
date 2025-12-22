@@ -442,8 +442,8 @@ async def create_review(order_id: int, review: ReviewCreate, client_id: int = Qu
 
             # Insert review
             await cur.execute(
-                'INSERT INTO "Review" (rating, comment, client_id) VALUES (%s, %s, %s) RETURNING review_id',
-                (review.rating, review.comment, client_id),
+                'INSERT INTO "Review" (rating, comment, highlights, client_id) VALUES (%s, %s, %s, %s) RETURNING review_id',
+                (review.rating, review.comment, review.highlights, client_id),
             )
             review_id = (await cur.fetchone())[0]
 
@@ -491,12 +491,28 @@ async def create_review(order_id: int, review: ReviewCreate, client_id: int = Qu
                     (freelancer_id,),
                 )
 
+            # Update service average rating
+            await cur.execute(
+                '''
+                UPDATE "Service" s
+                SET average_rating = (
+                    SELECT AVG(r.rating)
+                    FROM give_review gr
+                    JOIN "Review" r ON gr.review_id = r.review_id
+                    WHERE gr.service_id = s.service_id
+                )
+                WHERE s.service_id = %s
+                ''',
+                (service_id,),
+            )
+
             await conn.commit()
 
             return ReviewPublic(
                 review_id=review_id,
                 rating=review.rating,
                 comment=review.comment,
+                highlights=review.highlights,
                 client_id=client_id,
                 service_id=service_id,
             )
