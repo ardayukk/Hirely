@@ -5,6 +5,13 @@ from datetime import datetime, timedelta
 import json
 
 from backend.db import get_connection
+
+
+def _safe_json_load(raw):
+    try:
+        return json.loads(raw) if raw else None
+    except Exception:
+        return None
 from backend.schemas.order import (
     OrderCreate,
     OrderPublic,
@@ -186,7 +193,7 @@ async def get_orders(user_id: int = Query(...)):
                         client_id=row[7],
                         freelancer_id=row[8],
                         required_hours=row[9],
-                        requirements=json.loads(row[10]) if row[10] else None,
+                        requirements=_safe_json_load(row[10]),
                         addon_service_ids=addon_ids,
                     )
                 )
@@ -242,7 +249,7 @@ async def get_order_detail(order_id: int):
                 milestone_count=row[13],
                 current_phase=row[14],
                 required_hours=row[15],
-                requirements=json.loads(row[16]) if row[16] else None,
+                requirements=_safe_json_load(row[16]),
                 addon_service_ids=addon_ids,
             )
 
