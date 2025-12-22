@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.routers import health, jobs, db_test, auth, users, services, orders, messages, disputes, analytics
 
+# Hirely API
 app = FastAPI(title="Hirely API", version="0.1.0")
 
 # CORS for local dev (allow all localhost ports for development)
