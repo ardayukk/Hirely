@@ -383,6 +383,10 @@ export default function OrderDetail() {
               {chatOpen ? 'Hide Chat' : 'Open Chat'}
             </Button>
 
+            <Button fullWidth variant="outlined" sx={{ mb: 1 }} onClick={() => navigate('/inbox')}>
+              Go to Inbox
+            </Button>
+
             <Button fullWidth variant="outlined" onClick={() => navigate('/orders')}>
               Back to Orders
             </Button>

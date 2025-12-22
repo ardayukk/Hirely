@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.routers import health, jobs, db_test, auth, users, services, orders, messages, disputes, analytics
+from backend.routers import health, jobs, db_test, auth, users, services, orders, messages, disputes, analytics, notifications, deliverables, workdone, reports
 from backend.db import init_pool, close_pool
 
 app = FastAPI(title="Hirely API", version="0.1.0")
@@ -35,6 +35,10 @@ app.include_router(orders.router, prefix="/api")
 app.include_router(messages.router, prefix="/api")
 app.include_router(disputes.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
+app.include_router(deliverables.router, prefix="/api")
+app.include_router(workdone.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
 
 @app.get("/")
 def root():

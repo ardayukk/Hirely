@@ -1,22 +1,42 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import {
   Avatar,
   Box,
   Button,
   Card,
   CardContent,
+  CardHeader,
   Grid,
   TextField,
   Typography,
   Fade,
+  Stack,
+  Container,
+  Chip,
+  Alert,
+  Divider,
+  useTheme,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress,
 } from "@mui/material";
-import colors from "../helper/colors";
+import {
+  Edit as EditIcon,
+  Save as SaveIcon,
+  Cancel as CancelIcon,
+  PersonAdd as PersonAddIcon,
+  Warning as WarningIcon,
+} from "@mui/icons-material";
 import { useAuth, axiosInstance } from "../context/Authcontext.jsx";
 
 export default function Profile() {
   const { user, setUser } = useAuth();
+  const theme = useTheme();
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [profile, setProfile] = useState({
     name: user?.username || "",
     email: user?.email || "",
@@ -79,12 +99,10 @@ export default function Profile() {
     if (!user?.id) return;
     try {
       const roleRes = await axiosInstance.post("/api/auth/dev/set-role", { user_id: user.id, role });
-      // Update auth context with new role
       const updatedUser = { ...user, role: roleRes.data.role, username: roleRes.data.username };
       setUser(updatedUser);
       localStorage.setItem('hirely_user', JSON.stringify(updatedUser));
-      
-      // Refresh profile to reflect the new role
+
       const res = await axiosInstance.get(`/api/users/${user.id}`);
       const data = res.data;
       setProfile({
@@ -100,278 +118,252 @@ export default function Profile() {
     }
   };
 
-  const handleDisable = async () => {
-    if (!window.confirm("Are you sure you want to disable your account?")) return;
-    try {
-      // TODO: implement disable endpoint
-      alert('Disable functionality not yet implemented');
-    } catch (err) {
-      console.error("Error disabling account:", err);
-    }
-  };
-
   const handleDelete = async () => {
-    if (!window.confirm("This will permanently delete your account. Continue?")) return;
     try {
-      // TODO: implement delete endpoint
       alert('Delete functionality not yet implemented');
     } catch (err) {
       console.error("Error deleting account:", err);
     }
+    setDeleteDialogOpen(false);
   };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box
       sx={{
-        background: `linear-gradient(135deg, ${colors.color4}, ${colors.color5})`,
         minHeight: "100vh",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        p: 2,
+        background: `linear-gradient(135deg, ${theme.palette.background.default} 0%, ${theme.palette.mode === 'dark' ? '#1a1a2e' : '#f5f5f5'} 100%)`,
+        py: 4,
       }}
     >
-      <Fade in timeout={600}>
-        <Card
-          sx={{
-            width: 460,
-            borderRadius: 5,
-            backgroundColor: colors.color5,
-            boxShadow: `0 8px 30px ${colors.color3}`,
-            transition: "all 0.3s ease-in-out",
-            "&:hover": {
-              transform: "translateY(-4px)",
-              boxShadow: `0 12px 40px ${colors.color3}`,
-            },
-          }}
-        >
-          <CardContent sx={{ p: 5 }}>
-            <Box textAlign="center" mb={4}>
-              <Avatar
-                sx={{
-                  bgcolor: colors.color2,
-                  width: 90,
-                  height: 90,
-                  mx: "auto",
-                  fontSize: 38,
-                  fontWeight: 600,
-                  border: `3px solid ${colors.color3}`,
-                }}
-              >
-                {profile.name.charAt(0)}
-              </Avatar>
+      <Container maxWidth="md">
+        <Fade in timeout={600}>
+          <Stack spacing={3}>
+            {/* Profile Header */}
+            <Card
+              sx={{
+                borderRadius: 3,
+                boxShadow: theme.shadows[8],
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                  boxShadow: theme.shadows[12],
+                },
+              }}
+            >
+              <CardContent sx={{ p: 4 }}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} sx={{ alignItems: 'center' }}>
+                  <Avatar
+                    sx={{
+                      width: 100,
+                      height: 100,
+                      bgcolor: theme.palette.primary.main,
+                      fontSize: '2.5rem',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {profile.name?.[0]?.toUpperCase() || '?'}
+                  </Avatar>
 
-              <Typography
-                variant="h5"
-                sx={{
-                  mt: 2,
-                  fontWeight: "bold",
-                  letterSpacing: "0.5px",
-                  color: colors.color1,
-                }}
-              >
-                {profile.name}
-              </Typography>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
+                      {profile.name || 'User'}
+                    </Typography>
+                    <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: 1 }}>
+                      <Chip
+                        label={profile.role?.toUpperCase() || 'USER'}
+                        color="primary"
+                        variant="outlined"
+                        sx={{ fontWeight: 600 }}
+                      />
+                      <Chip
+                        label="Member"
+                        variant="outlined"
+                      />
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary">
+                      {profile.email}
+                    </Typography>
+                  </Box>
 
-              <Typography
-                variant="subtitle1"
-                sx={{ color: colors.color3, opacity: 0.9 }}
-              >
-                {profile.role}
-              </Typography>
-            </Box>
+                  {!editing && (
+                    <Button
+                      variant="contained"
+                      startIcon={<EditIcon />}
+                      onClick={() => setEditing(true)}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      Edit Profile
+                    </Button>
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
 
-            {loading && (
-              <Typography variant="body2" sx={{ color: colors.color3, mb: 2 }}>
-                Loading profile...
-              </Typography>
-            )}
+            {/* Profile Details */}
+            <Card sx={{ borderRadius: 3, boxShadow: theme.shadows[8] }}>
+              <CardHeader
+                title="Profile Information"
+                titleTypographyProps={{ variant: 'h6', fontWeight: 700 }}
+                sx={{ pb: 1 }}
+              />
+              <Divider />
+              <CardContent sx={{ p: 4 }}>
+                <Stack spacing={3}>
+                  <TextField
+                    label="Full Name"
+                    name="name"
+                    fullWidth
+                    value={profile.name}
+                    onChange={handleChange}
+                    disabled={!editing}
+                    variant={editing ? "outlined" : "standard"}
+                  />
+                  <TextField
+                    label="Email"
+                    name="email"
+                    fullWidth
+                    value={profile.email}
+                    onChange={handleChange}
+                    disabled={!editing}
+                    variant={editing ? "outlined" : "standard"}
+                  />
+                  <TextField
+                    label="Location / Organization"
+                    name="organization"
+                    fullWidth
+                    value={profile.organization}
+                    onChange={handleChange}
+                    disabled={!editing}
+                    variant={editing ? "outlined" : "standard"}
+                  />
 
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  label="Full Name"
-                  name="name"
-                  fullWidth
-                  value={profile.name}
-                  onChange={handleChange}
-                  disabled={!editing}
-                  InputProps={{
-                    style: {
-                      backgroundColor: colors.color5,
-                      borderRadius: 6,
-                      color: colors.color1,
-                    },
-                  }}
-                />
-              </Grid>
+                  {editing && (
+                    <Stack direction="row" spacing={2}>
+                      <Button
+                        variant="contained"
+                        startIcon={<SaveIcon />}
+                        onClick={handleSave}
+                        sx={{ textTransform: 'none' }}
+                      >
+                        Save Changes
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        startIcon={<CancelIcon />}
+                        onClick={() => setEditing(false)}
+                        sx={{ textTransform: 'none' }}
+                      >
+                        Cancel
+                      </Button>
+                    </Stack>
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
 
-              <Grid item xs={12}>
-                <TextField
-                  label="Email"
-                  name="email"
-                  fullWidth
-                  value={profile.email}
-                  onChange={handleChange}
-                  disabled={!editing}
-                  InputProps={{
-                    style: {
-                      backgroundColor: colors.color5,
-                      borderRadius: 6,
-                      color: colors.color1,
-                    },
-                  }}
-                />
-              </Grid>
+            {/* Role Management */}
+            <Card sx={{ borderRadius: 3, boxShadow: theme.shadows[8] }}>
+              <CardHeader
+                title="Account Type"
+                titleTypographyProps={{ variant: 'h6', fontWeight: 700 }}
+                sx={{ pb: 1 }}
+              />
+              <Divider />
+              <CardContent sx={{ p: 4 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Switch between Freelancer and Client roles. You can also work as both!
+                </Typography>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                  <Button
+                    variant={profile.role === 'freelancer' ? 'contained' : 'outlined'}
+                    startIcon={<PersonAddIcon />}
+                    onClick={() => handleDevRole('freelancer')}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Be a Freelancer
+                  </Button>
+                  <Button
+                    variant={profile.role === 'client' ? 'contained' : 'outlined'}
+                    startIcon={<PersonAddIcon />}
+                    onClick={() => handleDevRole('client')}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Be a Client
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
 
-              <Grid item xs={12}>
-                <TextField
-                  label="Organization"
-                  name="organization"
-                  fullWidth
-                  value={profile.organization}
-                  onChange={handleChange}
-                  disabled={!editing}
-                  InputProps={{
-                    style: {
-                      backgroundColor: colors.color5,
-                      borderRadius: 6,
-                      color: colors.color1,
-                    },
-                  }}
-                />
-              </Grid>
-            </Grid>
-
-            {/* ✅ Edit / Save button */}
-            <Box textAlign="center" mt={4}>
-              {editing ? (
-                <Button
-                  variant="contained"
-                  sx={{
-                    px: 4,
-                    py: 1.2,
-                    background: `linear-gradient(90deg, ${colors.color2}, ${colors.color1})`,
-                    fontWeight: "bold",
-                    borderRadius: "2rem",
-                    textTransform: "none",
-                    color: colors.color5,
-                    "&:hover": {
-                      background: `linear-gradient(90deg, ${colors.color1}, ${colors.color2})`,
-                      transform: "scale(1.05)",
-                    },
-                  }}
-                  onClick={handleSave}
-                >
-                  Save Changes
-                </Button>
-              ) : (
+            {/* Danger Zone */}
+            <Card
+              sx={{
+                borderRadius: 3,
+                boxShadow: theme.shadows[8],
+                border: `1px solid ${theme.palette.error.main}`,
+              }}
+            >
+              <CardHeader
+                title="Danger Zone"
+                titleTypographyProps={{ variant: 'h6', fontWeight: 700, color: 'error' }}
+                sx={{ pb: 1 }}
+              />
+              <Divider />
+              <CardContent sx={{ p: 4 }}>
+                <Alert severity="warning" sx={{ mb: 2 }} icon={<WarningIcon />}>
+                  Deleting your account is permanent and cannot be undone.
+                </Alert>
                 <Button
                   variant="outlined"
-                  sx={{
-                    px: 4,
-                    py: 1.2,
-                    color: colors.color1,
-                    borderColor: colors.color1,
-                    borderRadius: "2rem",
-                    textTransform: "none",
-                    fontWeight: "bold",
-                    backgroundColor: colors.color5,
-                    "&:hover": {
-                      backgroundColor: colors.color4,
-                      transform: "scale(1.05)",
-                    },
-                  }}
-                  onClick={() => setEditing(true)}
+                  color="error"
+                  onClick={() => setDeleteDialogOpen(true)}
+                  sx={{ textTransform: 'none' }}
                 >
-                  Edit Profile
+                  Delete Account
                 </Button>
-              )}
-            </Box>
+              </CardContent>
+            </Card>
+          </Stack>
+        </Fade>
 
-            {/* ✅ Disable / Delete buttons */}
-            <Box textAlign="center" mt={3} display="flex" flexDirection="column" gap={1}>
-              <Button
-                variant="contained"
-                color="primary"
-                sx={{ textTransform: "none" }}
-                onClick={() => handleDevRole("freelancer")}
-              >
-                Set Role: Freelancer (dev)
-              </Button>
-              <Button
-                variant="contained"
-                color="primary"
-                sx={{ textTransform: "none" }}
-                onClick={() => handleDevRole("client")}
-              >
-                Set Role: Client (dev)
-              </Button>
-              <Button
-                variant="contained"
-                color="primary"
-                sx={{ textTransform: "none" }}
-                onClick={() => handleDevRole("admin")}
-              >
-                Set Role: Admin (dev)
-              </Button>
-
-              <Button
-                variant="outlined"
-                color="warning"
-                sx={{
-                  borderColor: "#e6b800",
-                  color: "#e6b800",
-                  borderRadius: "2rem",
-                  textTransform: "none",
-                  "&:hover": {
-                    backgroundColor: "#fff3cd",
-                  },
-                }}
-                onClick={handleDisable}
-              >
-                Disable Account
-              </Button>
-
-              <Button
-                variant="outlined"
-                color="success"
-                sx={{
-                  borderColor: "#198754",
-                  color: "#198754",
-                  borderRadius: "2rem",
-                  textTransform: "none",
-                  "&:hover": {
-                    backgroundColor: "#e6f4ea",
-                  },
-                }}
-                onClick={async () => {
-                  alert("Enable endpoint not implemented yet");
-                }}
-              >
-                Re-enable Account
-              </Button>
-
-              <Button
-                variant="outlined"
-                color="error"
-                sx={{
-                  borderColor: "#d32f2f",
-                  color: "#d32f2f",
-                  borderRadius: "2rem",
-                  textTransform: "none",
-                  "&:hover": {
-                    backgroundColor: "#fdecea",
-                  },
-                }}
-                onClick={handleDelete}
-              >
-                Delete Account
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
-      </Fade>
+        {/* Delete Confirmation Dialog */}
+        <Dialog
+          open={deleteDialogOpen}
+          onClose={() => setDeleteDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle sx={{ fontWeight: 700, color: 'error.main' }}>
+            Delete Account?
+          </DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ mt: 2 }}>
+              <Typography>
+                Are you sure you want to permanently delete your account? This action cannot be undone.
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                All your data, including messages, orders, and services, will be deleted.
+              </Typography>
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button
+              color="error"
+              variant="contained"
+              onClick={handleDelete}
+            >
+              Delete Permanently
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Container>
     </Box>
   );
 }

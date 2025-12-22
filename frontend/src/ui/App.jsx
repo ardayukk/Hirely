@@ -11,6 +11,7 @@ import Home from '../pages/Home';
 import Inbox from '../pages/Inbox';
 import Login from '../pages/Login';
 import Logout from '../pages/Logout';
+import Notifications from '../pages/Notifications';
 import OrderDetail from '../pages/OrderDetail';
 import Orders from '../pages/Orders';
 import Profile from '../pages/Profile';
@@ -60,6 +61,7 @@ function AppContent() {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Button component={Link} to="/home">Home</Button>
+                            <Button component={Link} to="/notifications">Notifications</Button>
                             <Button onClick={handleLogout}>Logout</Button>
                             <Button component={Link} to="/profile">Profile</Button>
                             <ThemeToggle />
@@ -85,6 +87,7 @@ function AppContent() {
                 <Route path="/orders/:orderId" element={requireAuth(<OrderDetail />)} />
                 <Route path="/inbox" element={requireAuth(<Inbox />)} />
                 <Route path="/inbox/:conversationId" element={requireAuth(<OrderDetail />)} />
+                <Route path="/notifications" element={requireAuth(<Notifications />)} />
                 <Route path="/services" element={requireAuth(<Services />)} />
                 <Route path="/services/:serviceId" element={requireAuth(<ServiceDetail />)} />
                 <Route path="/services/:serviceId/edit" element={requireAuth(<EditService />)} />

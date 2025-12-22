@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import {
   Box,
   Button,
   Card,
   CardContent,
+  CardMedia,
   Chip,
   FormControl,
   Grid,
@@ -14,11 +15,20 @@ import {
   Typography,
   Fade,
   Alert,
+  Rating,
+  Stack,
+  Container,
+  CircularProgress,
+  useTheme,
 } from "@mui/material";
+import { Search as SearchIcon, Clear as ClearIcon } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
 import colors from "../helper/colors";
 import { axiosInstance } from "../context/Authcontext";
 
 export default function Services() {
+  const navigate = useNavigate();
+  const theme = useTheme();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -80,237 +90,250 @@ export default function Services() {
   return (
     <Box
       sx={{
-        background: `linear-gradient(135deg, ${colors.color4}, ${colors.color5})`,
+        background: `linear-gradient(135deg, ${theme.palette.background.default} 0%, ${theme.palette.mode === 'dark' ? '#1a1a2e' : '#f5f5f5'} 100%)`,
         minHeight: "100vh",
-        p: 3,
+        py: 4,
       }}
     >
-      <Typography
-        variant="h4"
-        sx={{
-          fontWeight: "bold",
-          color: colors.color1,
-          mb: 3,
-          textAlign: "center",
-        }}
-      >
-        Browse Services
-      </Typography>
+      <Container maxWidth="lg">
+        <Typography
+          variant="h3"
+          sx={{
+            fontWeight: "800",
+            mb: 1,
+            background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+            backgroundClip: "text",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+          }}
+        >
+          Browse Services
+        </Typography>
+        <Typography variant="h6" color="text.secondary" sx={{ mb: 4 }}>
+          Discover talented freelancers and their services
+        </Typography>
 
-      {/* Filters */}
-      <Card
-        sx={{
-          mb: 3,
-          backgroundColor: colors.color5,
-          boxShadow: `0 4px 15px ${colors.color3}`,
-          borderRadius: 3,
-        }}
-      >
-        <CardContent>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
-              <TextField
-                label="Category"
-                name="category"
-                fullWidth
-                value={filters.category}
-                onChange={handleFilterChange}
-                placeholder="e.g. Design, Writing"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={2}>
-              <TextField
-                label="Min Price"
-                name="min_price"
-                type="number"
-                fullWidth
-                value={filters.min_price}
-                onChange={handleFilterChange}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={2}>
-              <TextField
-                label="Max Price"
-                name="max_price"
-                type="number"
-                fullWidth
-                value={filters.max_price}
-                onChange={handleFilterChange}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={2}>
-              <TextField
-                label="Delivery Time (days)"
-                name="delivery_time"
-                type="number"
-                fullWidth
-                value={filters.delivery_time}
-                onChange={handleFilterChange}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={2}>
-              <TextField
-                label="Min Rating"
-                name="rating"
-                type="number"
-                inputProps={{ step: 0.1, min: 0, max: 5 }}
-                fullWidth
-                value={filters.rating}
-                onChange={handleFilterChange}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <FormControl fullWidth>
-                <InputLabel>Sort By</InputLabel>
-                <Select
-                  name="sort"
-                  value={filters.sort}
+        {error && (
+          <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        {/* Filters Card */}
+        <Card
+          sx={{
+            mb: 4,
+            boxShadow: theme.shadows[8],
+            borderRadius: 2,
+            transition: "all 0.3s ease",
+          }}
+        >
+          <CardContent>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+              Filter Services
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <TextField
+                  label="Category"
+                  name="category"
+                  fullWidth
+                  value={filters.category}
                   onChange={handleFilterChange}
-                  label="Sort By"
+                  placeholder="e.g. Design, Writing"
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={2}>
+                <TextField
+                  label="Min Price ($)"
+                  name="min_price"
+                  type="number"
+                  fullWidth
+                  value={filters.min_price}
+                  onChange={handleFilterChange}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={2}>
+                <TextField
+                  label="Max Price ($)"
+                  name="max_price"
+                  type="number"
+                  fullWidth
+                  value={filters.max_price}
+                  onChange={handleFilterChange}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={2}>
+                <TextField
+                  label="Delivery (days)"
+                  name="delivery_time"
+                  type="number"
+                  fullWidth
+                  value={filters.delivery_time}
+                  onChange={handleFilterChange}
+                  size="small"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Sort</InputLabel>
+                  <Select
+                    name="sort"
+                    value={filters.sort}
+                    onChange={handleFilterChange}
+                    label="Sort"
+                  >
+                    <MenuItem value="recency">Newest</MenuItem>
+                    <MenuItem value="price_asc">Price: Low to High</MenuItem>
+                    <MenuItem value="price_desc">Price: High to Low</MenuItem>
+                    <MenuItem value="rating">Highest Rated</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6} md={1} sx={{ display: "flex", gap: 1 }}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  size="small"
+                  startIcon={<SearchIcon />}
+                  onClick={applyFilters}
+                  sx={{ textTransform: "none" }}
                 >
-                  <MenuItem value="recency">Most Recent</MenuItem>
-                  <MenuItem value="popularity">Most Popular</MenuItem>
-                  <MenuItem value="reviews">Highest Rated</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Button
-                variant="contained"
-                fullWidth
-                sx={{
-                  height: "100%",
-                  background: `linear-gradient(90deg, ${colors.color2}, ${colors.color1})`,
-                  fontWeight: "bold",
-                  "&:hover": {
-                    background: `linear-gradient(90deg, ${colors.color1}, ${colors.color2})`,
-                  },
-                }}
-                onClick={applyFilters}
-              >
-                Apply Filters
-              </Button>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Button
-                variant="outlined"
-                fullWidth
-                sx={{
-                  height: "100%",
-                  color: colors.color1,
-                  borderColor: colors.color1,
-                }}
-                onClick={clearFilters}
-              >
-                Clear
-              </Button>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
-
-      {/* Service Cards */}
-      {loading && (
-        <Typography variant="body1" sx={{ color: colors.color1, textAlign: "center" }}>
-          Loading services...
-        </Typography>
-      )}
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      {!loading && !error && services.length === 0 && (
-        <Typography variant="body1" sx={{ color: colors.color1, textAlign: "center" }}>
-          No services found. Try adjusting your filters.
-        </Typography>
-      )}
-
-      <Grid container spacing={3}>
-        {services.map((service) => {
-          const price = Number(service.hourly_price ?? 0);
-          const rating = Number(service.average_rating ?? 0);
-
-          return (
-            <Grid item xs={12} sm={6} md={4} key={service.service_id}>
-              <Fade in timeout={400}>
-                <Card
-                  sx={{
-                    backgroundColor: colors.color5,
-                    borderRadius: 3,
-                    boxShadow: `0 4px 15px ${colors.color3}`,
-                    transition: "all 0.3s",
-                    "&:hover": {
-                      transform: "translateY(-4px)",
-                      boxShadow: `0 8px 25px ${colors.color3}`,
-                    },
-                    cursor: "pointer",
-                  }}
-                  onClick={() => (window.location.href = `/services/${service.service_id}`)}
+                  Filter
+                </Button>
+              </Grid>
+              <Grid item xs={12} sm={6} md={1}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  size="small"
+                  startIcon={<ClearIcon />}
+                  onClick={clearFilters}
+                  sx={{ textTransform: "none" }}
                 >
-                  <CardContent>
-                    <Typography
-                      variant="h6"
+                  Clear
+                </Button>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+
+        {/* Loading State */}
+        {loading && (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+            <CircularProgress />
+          </Box>
+        )}
+
+        {/* Services Grid */}
+        {!loading && (
+          <Grid container spacing={3}>
+            {services.length > 0 ? (
+              services.map((service) => (
+                <Grid item xs={12} sm={6} md={4} key={service.service_id}>
+                  <Fade in={true} timeout={300}>
+                    <Card
+                      onClick={() => navigate(`/services/${service.service_id}`)}
                       sx={{
-                        fontWeight: "bold",
-                        color: colors.color1,
-                        mb: 1,
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column",
+                        cursor: "pointer",
+                        transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                        borderRadius: 2,
+                        "&:hover": {
+                          transform: "translateY(-8px)",
+                          boxShadow: theme.shadows[16],
+                        },
                       }}
                     >
-                      {service.title}
-                    </Typography>
+                      <CardMedia
+                        sx={{
+                          height: 200,
+                          backgroundColor: theme.palette.mode === "dark" ? "#2c3e50" : "#ecf0f1",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Typography variant="h6" color="text.secondary">
+                          📋 {service.title?.slice(0, 30)}...
+                        </Typography>
+                      </CardMedia>
+                      <CardContent sx={{ flex: 1 }}>
+                        <Stack spacing={2}>
+                          <div>
+                            <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+                              {service.title}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              by <strong>{service.freelancer_name}</strong>
+                            </Typography>
+                          </div>
 
-                    <Chip
-                      label={service.category}
-                      sx={{
-                        backgroundColor: colors.color3,
-                        color: colors.color6,
-                        fontWeight: "bold",
-                        mb: 2,
-                      }}
-                    />
+                          {service.description && (
+                            <Typography variant="body2" color="text.secondary">
+                              {service.description.slice(0, 80)}...
+                            </Typography>
+                          )}
 
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: colors.color1,
-                      mb: 2,
-                      minHeight: 60,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {service.description || "No description available."}
+                          <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+                            {service.category && (
+                              <Chip
+                                label={service.category}
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                              />
+                            )}
+                            {service.tags && (
+                              <Chip
+                                label={service.tags?.split(",")[0]}
+                                size="small"
+                                variant="outlined"
+                              />
+                            )}
+                          </Stack>
+
+                          <Stack direction="row" spacing={2} sx={{ alignItems: "center", mt: "auto" }}>
+                            <div>
+                              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                                ${service.price || "N/A"}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {service.delivery_time || "N/A"} days delivery
+                              </Typography>
+                            </div>
+                            {service.average_rating && (
+                              <Rating
+                                value={parseFloat(service.average_rating)}
+                                readOnly
+                                size="small"
+                                sx={{ ml: "auto" }}
+                              />
+                            )}
+                          </Stack>
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  </Fade>
+                </Grid>
+              ))
+            ) : (
+              <Grid item xs={12}>
+                <Card sx={{ textAlign: "center", py: 6 }}>
+                  <Typography variant="h6" color="text.secondary">
+                    No services found. Try adjusting your filters.
                   </Typography>
-
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="body2" sx={{ color: colors.color1, fontWeight: "bold" }}>
-                      {Number.isFinite(price) ? `$${price.toFixed(2)}/hr` : "N/A"}
-                    </Typography>
-                    <Chip
-                      label={`★ ${Number.isFinite(rating) ? rating.toFixed(1) : "0.0"}`}
-                      sx={{
-                        backgroundColor: colors.color2,
-                        color: colors.color5,
-                        fontWeight: "bold",
-                      }}
-                    />
-                  </Box>
-
-                  {service.delivery_time && (
-                    <Typography variant="caption" sx={{ color: colors.color3, mt: 1, display: "block" }}>
-                      Delivery: {service.delivery_time} days
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
-            </Fade>
+                </Card>
+              </Grid>
+            )}
           </Grid>
-        );
-        })}
-      </Grid>
+        )}
+      </Container>
     </Box>
   );
 }
