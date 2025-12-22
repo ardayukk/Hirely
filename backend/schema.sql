@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS "Order" (
     total_price DECIMAL(10, 2),
     review_given BOOLEAN DEFAULT FALSE,
     report_id INTEGER,
+    requirements TEXT,
     FOREIGN KEY (report_id) REFERENCES "AnalyticsReport"(report_id) ON DELETE SET NULL
 );
 
@@ -339,13 +340,13 @@ CREATE TABLE IF NOT EXISTS "WorkDone" (
 -- INDICES (for performance)
 -- ============================================
 
-CREATE INDEX idx_user_email ON "User"(email);
-CREATE INDEX idx_notification_user ON "Notification"(user_id);
-CREATE INDEX idx_service_category ON "Service"(category);
-CREATE INDEX idx_order_date ON "Order"(order_date);
-CREATE INDEX idx_messages_sender ON "Messages"(sender_id);
-CREATE INDEX idx_messages_receiver ON "Messages"(receiver_id);
-CREATE INDEX idx_review_client ON "Review"(client_id);
+CREATE INDEX IF NOT EXISTS idx_user_email ON "User"(email);
+CREATE INDEX IF NOT EXISTS idx_notification_user ON "Notification"(user_id);
+CREATE INDEX IF NOT EXISTS idx_service_category ON "Service"(category);
+CREATE INDEX IF NOT EXISTS idx_order_date ON "Order"(order_date);
+CREATE INDEX IF NOT EXISTS idx_messages_sender ON "Messages"(sender_id);
+CREATE INDEX IF NOT EXISTS idx_messages_receiver ON "Messages"(receiver_id);
+CREATE INDEX IF NOT EXISTS idx_review_client ON "Review"(client_id);
 
 -- Allow reported.admin_id to be nullable (admin can be assigned later)
 DO $$

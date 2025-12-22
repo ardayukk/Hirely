@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Container, Grid, Box, Typography, Select, MenuItem, TextField, Button, Alert } from '@mui/material';
 import { axiosInstance, useAuth } from '../context/Authcontext';
+import RequirementsEditor from '../components/RequirementsEditor';
 
 export default function Checkout() {
   const { serviceId } = useParams();
@@ -11,6 +12,7 @@ export default function Checkout() {
   const [orderType, setOrderType] = useState('small');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [milestoneCount, setMilestoneCount] = useState(3);
+  const [requirements, setRequirements] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -46,6 +48,7 @@ export default function Checkout() {
         order_type: orderType,
         delivery_date: normalizedDelivery,
         milestone_count: orderType === 'big' ? normalizedMilestones : null,
+        requirements: requirements,
       };
 
       const res = await axiosInstance.post(`/api/orders?client_id=${user.id}`, payload);
@@ -119,6 +122,10 @@ export default function Checkout() {
               />
             </Box>
           )}
+
+          <Box sx={{ mt: 4 }}>
+            <RequirementsEditor value={requirements} onChange={setRequirements} />
+          </Box>
         </Grid>
 
         <Grid item xs={12} md={5}>

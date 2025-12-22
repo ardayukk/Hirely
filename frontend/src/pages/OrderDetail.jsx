@@ -300,6 +300,33 @@ export default function OrderDetail() {
               </Button>
             )}
 
+            {order.requirements && (
+              <>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="subtitle1" gutterBottom>Project Details</Typography>
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Description</Typography>
+                  <Typography variant="body1">{order.requirements.description || '—'}</Typography>
+                </Box>
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Deliverables</Typography>
+                  <Typography variant="body1">{order.requirements.deliverables || '—'}</Typography>
+                </Box>
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Preferred Style / Approach</Typography>
+                  <Typography variant="body1">{order.requirements.style || '—'}</Typography>
+                </Box>
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">References</Typography>
+                  <Typography variant="body1">{order.requirements.references || '—'}</Typography>
+                </Box>
+                <Box sx={{ mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Constraints / Deadlines</Typography>
+                  <Typography variant="body1">{order.requirements.constraints || '—'}</Typography>
+                </Box>
+              </>
+            )}
+
             {isClient && !['disputed', 'cancelled'].includes(order.status) && (
               <Button fullWidth variant="outlined" color="warning" sx={{ mb: 1 }} onClick={handleOpenDispute} disabled={disputeLoading}>
                 {disputeLoading ? 'Opening Dispute...' : 'Open Dispute'}

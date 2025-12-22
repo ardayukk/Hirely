@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
@@ -11,6 +11,7 @@ class OrderCreate(BaseModel):
     delivery_date: Optional[datetime] = None  # for small orders
     milestone_count: Optional[int] = None  # for big orders
     milestone_delivery_date: Optional[datetime] = None
+    requirements: Optional[Dict[str, Any]] = None
 
 
 class OrderPublic(BaseModel):
@@ -23,6 +24,7 @@ class OrderPublic(BaseModel):
     service_id: int
     client_id: int
     freelancer_id: Optional[int] = None
+    requirements: Optional[Dict[str, Any]] = None
 
 
 class OrderDetail(OrderPublic):
