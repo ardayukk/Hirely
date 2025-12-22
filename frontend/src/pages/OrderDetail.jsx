@@ -19,6 +19,7 @@ export default function OrderDetail() {
   const [messageError, setMessageError] = useState('');
   const [disputeLoading, setDisputeLoading] = useState(false);
   const [disputeError, setDisputeError] = useState('');
+  const [addonDetails, setAddonDetails] = useState([]);
 
   useEffect(() => {
     fetchOrder();
@@ -35,6 +36,20 @@ export default function OrderDetail() {
       setChatOpen(true);
     }
   }, [location.hash]);
+
+  useEffect(() => {
+    const loadAddonDetails = async () => {
+      if (!order?.addon_service_ids || order.addon_service_ids.length === 0) return;
+      try {
+        const promises = order.addon_service_ids.map(id => axiosInstance.get(`/api/services/${id}`));
+        const results = await Promise.all(promises);
+        setAddonDetails(results.map(r => r.data));
+      } catch (err) {
+        console.error('Failed to load addon details', err);
+      }
+    };
+    loadAddonDetails();
+  }, [order]);
 
   const fetchOrder = async () => {
     try {
@@ -257,6 +272,21 @@ export default function OrderDetail() {
               <Typography variant="body2" color="text.secondary">Freelancer</Typography>
               <Typography variant="body1">{order.freelancer_name || `Freelancer #${order.freelancer_id}`}</Typography>
             </Box>
+          </Paper>
+
+          <Paper sx={{ p: 3, mt: 3 }}>
+            <Typography variant="h6" gutterBottom>Add-ons</Typography>
+            <Divider sx={{ mb: 2 }} />
+            {addonDetails.length > 0 ? (
+              addonDetails.map(a => (
+                <Box key={a.service_id} sx={{ mb: 1 }}>
+                  <Typography sx={{ fontWeight: 'bold' }}>{a.title}</Typography>
+                  <Typography variant="caption" color="text.secondary">{a.description || ''} — ${a.hourly_price ? a.hourly_price.toFixed(2) : '0.00'}</Typography>
+                </Box>
+              ))
+            ) : (
+              <Typography variant="body2">No add-ons selected.</Typography>
+            )}
           </Paper>
         </Grid>
 

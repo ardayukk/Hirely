@@ -11,14 +11,23 @@ import {
   Grid,
   Typography,
   Fade,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from "@mui/material";
 import colors from "../helper/colors";
 import { axiosInstance } from "../context/Authcontext";
+import { useAuth } from "../context/Authcontext";
 
 export default function ServiceDetail() {
   const { serviceId } = useParams();
   const [service, setService] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const [openAddOn, setOpenAddOn] = useState(false);
+  const [addonData, setAddonData] = useState({ title: '', description: '', delivery_time: 1, hourly_price: 0.0 });
 
   useEffect(() => {
     const fetchServiceDetail = async () => {
@@ -313,7 +322,66 @@ export default function ServiceDetail() {
               >
                 Back
               </Button>
+              {user && user.role === 'client' && (
+                <Button
+                  variant="outlined"
+                  sx={{
+                    py: 1.5,
+                    px: 3,
+                    color: colors.color1,
+                    borderColor: colors.color1,
+                    fontWeight: "bold",
+                    "&:hover": {
+                      backgroundColor: colors.color4,
+                    },
+                  }}
+                  onClick={() => setOpenAddOn(true)}
+                >
+                  Create Add-on
+                </Button>
+              )}
             </Box>
+            {/* Add-on Creation Dialog */}
+            <Dialog open={openAddOn} onClose={() => setOpenAddOn(false)}>
+              <DialogTitle>Create Add-on</DialogTitle>
+              <DialogContent>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1, minWidth: 400 }}>
+                  <TextField label="Title" value={addonData.title} onChange={(e) => setAddonData({ ...addonData, title: e.target.value })} />
+                  <TextField label="Description" multiline minRows={3} value={addonData.description} onChange={(e) => setAddonData({ ...addonData, description: e.target.value })} />
+                  <TextField label="Delivery Time (days)" type="number" value={addonData.delivery_time} onChange={(e) => setAddonData({ ...addonData, delivery_time: e.target.value })} />
+                  <TextField label="Price (hourly)" type="number" value={addonData.hourly_price} onChange={(e) => setAddonData({ ...addonData, hourly_price: e.target.value })} />
+                </Box>
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setOpenAddOn(false)}>Cancel</Button>
+                <Button onClick={async () => {
+                  // create addon service then link it
+                  if (!user) { alert('You must be logged in'); return; }
+                  try {
+                    setLoading(true);
+                    const createPayload = {
+                      title: addonData.title,
+                      category: 'Add-on',
+                      description: addonData.description,
+                      delivery_time: Number(addonData.delivery_time),
+                      hourly_price: Number(addonData.hourly_price),
+                      package_tier: 'addon',
+                    };
+                    const createRes = await axiosInstance.post(`/api/services?freelancer_id=${user.id}`, createPayload);
+                    const addonId = createRes.data.service_id;
+                    await axiosInstance.post(`/api/services/${serviceId}/addons?freelancer_id=${user.id}`, { addon_service_id: addonId });
+                    const res = await axiosInstance.get(`/api/services/${serviceId}`);
+                    setService(res.data);
+                    setOpenAddOn(false);
+                    setAddonData({ title: '', description: '', delivery_time: 1, hourly_price: 0.0 });
+                    alert('Add-on created and linked');
+                  } catch (err) {
+                    console.error(err);
+                    alert(err.response?.data?.detail || 'Failed to create add-on');
+                  } finally { setLoading(false); }
+                }}>Create</Button>
+              </DialogActions>
+            </Dialog>
           </CardContent>
         </Card>
       </Fade>

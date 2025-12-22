@@ -13,6 +13,8 @@ export default function Checkout() {
   const [deliveryDate, setDeliveryDate] = useState('');
   const [milestoneCount, setMilestoneCount] = useState(3);
   const [requirements, setRequirements] = useState({});
+  const [selectedAddons, setSelectedAddons] = useState([]);
+  const [totalPrice, setTotalPrice] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,6 +31,18 @@ export default function Checkout() {
     if (serviceId) fetchService();
   }, [serviceId]);
 
+  useEffect(() => {
+    if (!service) return;
+    const base = service.hourly_price || 0;
+    let addonsTotal = 0;
+    if (service.addons && service.addons.length && selectedAddons.length) {
+      addonsTotal = service.addons
+        .filter(a => selectedAddons.includes(a.service_id))
+        .reduce((s, a) => s + (a.hourly_price || 0), 0);
+    }
+    setTotalPrice((base || 0) + addonsTotal);
+  }, [service, selectedAddons]);
+
   const handlePlaceOrder = async () => {
     if (!user || user.role !== 'client') {
       alert('You must be logged in as a client to place an order');
@@ -44,11 +58,12 @@ export default function Checkout() {
 
       const payload = {
         service_id: parseInt(serviceId),
-        total_price: service.hourly_price || 100,
+        total_price: totalPrice || service.hourly_price || 100,
         order_type: orderType,
         delivery_date: normalizedDelivery,
         milestone_count: orderType === 'big' ? normalizedMilestones : null,
         requirements: requirements,
+        addon_service_ids: selectedAddons,
       };
 
       const res = await axiosInstance.post(`/api/orders?client_id=${user.id}`, payload);
@@ -139,9 +154,36 @@ export default function Checkout() {
               <Typography>Type:</Typography>
               <Typography>{orderType === 'small' ? 'Small' : 'Big (Milestones)'}</Typography>
             </Box>
+
+            {service.addons && service.addons.length > 0 && (
+              <Box sx={{ mt: 2, mb: 2 }}>
+                <Typography variant="subtitle2">Add-ons</Typography>
+                {service.addons.map((a) => (
+                  <Box key={a.service_id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                    <Box>
+                      <Typography sx={{ fontWeight: 'bold' }}>{a.title}</Typography>
+                      <Typography variant="caption" color="text.secondary">{a.category} — {a.description || ''}</Typography>
+                    </Box>
+                    <Box>
+                      <label style={{ marginRight: 8 }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedAddons.includes(a.service_id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedAddons(prev => [...prev, a.service_id]);
+                            else setSelectedAddons(prev => prev.filter(id => id !== a.service_id));
+                          }}
+                        />
+                      </label>
+                      <Typography>{a.hourly_price ? `$${a.hourly_price.toFixed(2)}` : 'Free'}</Typography>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            )}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', mt: 2, pt: 2, borderTop: '1px solid #e0e0e0' }}>
               <Typography>Total:</Typography>
-              <Typography>${service.hourly_price ? service.hourly_price.toFixed(2) : 'N/A'}</Typography>
+              <Typography>${(totalPrice || service.hourly_price || 0).toFixed(2)}</Typography>
             </Box>
 
             <Button
