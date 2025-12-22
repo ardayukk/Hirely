@@ -51,7 +51,7 @@ export default function Home() {
                         title="Admin"
                         actions={[
                             { label: "Admin panel", to: "/admin", variant: "contained" },
-                            { label: "Manage users", to: "/admin" },
+                            { label: "Analytics", to: "/admin" },
                         ]}
                     />
 

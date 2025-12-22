@@ -5,7 +5,7 @@ import { useContext } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/Authcontext'; // ✅ import your Auth hook (fixed relative path & filename case)
 import { MockApiProvider } from '../context/MockApiProvider';
-import Admin from '../pages/AdminDisputes';
+import Admin from '../pages/Admin';
 import Checkout from '../pages/Checkout';
 import ClientWorkspace from '../pages/Client';
 import CreateService from '../pages/CreateService';
