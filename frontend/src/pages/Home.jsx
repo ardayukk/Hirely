@@ -28,6 +28,7 @@ export default function Home() {
                         title="Freelancer"
                         actions={[
                             { label: "Create service", to: "/create-service", variant: "contained" },
+                            { label: "Workspace", to: "/workspace" },
                             { label: "My services", to: "/myServices" },
                             { label: "Orders", to: "/orders" },
                             { label: "Inbox", to: "/inbox" },
