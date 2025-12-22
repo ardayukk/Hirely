@@ -91,15 +91,13 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                 included_revision_limit = _tier_included_revision_limit(package_tier)
 
                 # 1. Create base order
-                requirements_json = json.dumps(order.requirements) if order.requirements else None
-                req_hours = order.required_hours if getattr(order, 'required_hours', None) is not None else None
                 await cur.execute(
                     '''
-                    INSERT INTO "Order" (order_date, status, revision_count, included_revision_limit, extra_revisions_purchased, total_price, review_given, requirements, required_hours)
-                    VALUES (NOW(), 'pending', 0, %s, 0, %s, FALSE, %s, %s)
+                    INSERT INTO "Order" (order_date, status, revision_count, included_revision_limit, extra_revisions_purchased, total_price, review_given)
+                    VALUES (NOW(), 'pending', 0, %s, 0, %s, FALSE)
                     RETURNING order_id
                     ''',
-                    (included_revision_limit, order.total_price, requirements_json, req_hours),
+                    (included_revision_limit, order.total_price),
                 )
                 order_id = (await cur.fetchone())[0]
 
@@ -171,7 +169,6 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                     service_id=service_id,
                     client_id=client_id,
                     freelancer_id=freelancer_id,
-                    required_hours=order.required_hours if getattr(order, 'required_hours', None) is not None else None,
                     addon_service_ids=getattr(order, 'addon_service_ids', None) or [],
                 )
 
