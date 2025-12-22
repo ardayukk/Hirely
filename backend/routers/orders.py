@@ -53,13 +53,14 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
 
                 # 1. Create base order
                 requirements_json = json.dumps(order.requirements) if order.requirements else None
+                req_hours = order.required_hours if getattr(order, 'required_hours', None) is not None else None
                 await cur.execute(
                     '''
-                    INSERT INTO "Order" (order_date, status, revision_count, total_price, review_given, requirements)
-                    VALUES (NOW(), 'pending', 0, %s, FALSE, %s)
+                    INSERT INTO "Order" (order_date, status, revision_count, total_price, review_given, requirements, required_hours)
+                    VALUES (NOW(), 'pending', 0, %s, FALSE, %s, %s)
                     RETURNING order_id
                     ''',
-                    (order.total_price, requirements_json),
+                    (order.total_price, requirements_json, req_hours),
                 )
                 order_id = (await cur.fetchone())[0]
 
@@ -110,6 +111,7 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                     service_id=service_id,
                     client_id=client_id,
                     freelancer_id=freelancer_id,
+                    required_hours=order.required_hours if getattr(order, 'required_hours', None) is not None else None,
                 )
 
             except Exception as e:
@@ -125,7 +127,7 @@ async def get_orders(user_id: int = Query(...)):
             # Try as client
             query = '''
                 SELECT o.order_id, o.order_date, o.status, o.revision_count, o.total_price, o.review_given,
-                       mo.service_id, mo.client_id, fo.freelancer_id, o.requirements
+                       mo.service_id, mo.client_id, fo.freelancer_id, o.required_hours, o.requirements
                 FROM "Order" o
                 JOIN make_order mo ON o.order_id = mo.order_id
                 LEFT JOIN finish_order fo ON o.order_id = fo.order_id
@@ -138,7 +140,7 @@ async def get_orders(user_id: int = Query(...)):
             # Try as freelancer
             query_fl = '''
                 SELECT o.order_id, o.order_date, o.status, o.revision_count, o.total_price, o.review_given,
-                       mo.service_id, mo.client_id, fo.freelancer_id, o.requirements
+                       mo.service_id, mo.client_id, fo.freelancer_id, o.required_hours, o.requirements
                 FROM "Order" o
                 JOIN make_order mo ON o.order_id = mo.order_id
                 JOIN finish_order fo ON o.order_id = fo.order_id
@@ -163,7 +165,8 @@ async def get_orders(user_id: int = Query(...)):
                         service_id=row[6],
                         client_id=row[7],
                         freelancer_id=row[8],
-                        requirements=json.loads(row[9]) if row[9] else None,
+                        required_hours=row[9],
+                        requirements=json.loads(row[10]) if row[10] else None,
                     )
                 )
             return orders
@@ -181,7 +184,7 @@ async def get_order_detail(order_id: int):
                        na_fl.name AS freelancer_name,
                        na_cl.name AS client_name,
                        bo.milestone_count, bo.current_phase,
-                       o.requirements
+                       o.required_hours, o.requirements
                 FROM "Order" o
                 JOIN make_order mo ON o.order_id = mo.order_id
                 LEFT JOIN finish_order fo ON o.order_id = fo.order_id
@@ -213,7 +216,8 @@ async def get_order_detail(order_id: int):
                 is_big_order=row[13] is not None,
                 milestone_count=row[13],
                 current_phase=row[14],
-                requirements=json.loads(row[15]) if row[15] else None,
+                required_hours=row[15],
+                requirements=json.loads(row[16]) if row[16] else None,
             )
 
 
