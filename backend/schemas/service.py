@@ -28,6 +28,7 @@ class ServicePublic(BaseModel):
 
 class FreelancerSummary(BaseModel):
     user_id: int
+    username: str
     tagline: Optional[str] = None
     avg_rating: float
     total_orders: int

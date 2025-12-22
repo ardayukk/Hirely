@@ -171,11 +171,11 @@ export default function ServiceDetail() {
                     fontWeight: "bold",
                   }}
                 >
-                  F
+                  {service.freelancer.username ? service.freelancer.username.charAt(0).toUpperCase() : "F"}
                 </Avatar>
                 <Box>
                   <Typography variant="body1" sx={{ fontWeight: "bold", color: colors.color1 }}>
-                    Freelancer ID: {service.freelancer.user_id}
+                    {service.freelancer.username}
                   </Typography>
                   <Typography variant="body2" sx={{ color: colors.color3 }}>
                     {service.freelancer.tagline || "No tagline"}

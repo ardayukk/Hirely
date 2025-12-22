@@ -194,10 +194,12 @@ async def get_service_details(service_id: int):
                   s.service_id, s.title, s.category, s.description, s.delivery_time,
                   s.hourly_price, s.package_tier, s.status, s.average_rating,
                   f.user_id, f.tagline, f.avg_rating, f.total_orders, f.total_reviews,
-                  sw.sample_work
+                  sw.sample_work,
+                  na.name
                 FROM "Service" s
                 JOIN create_service cs ON s.service_id = cs.service_id
                 JOIN "Freelancer" f ON cs.freelancer_id = f.user_id
+                JOIN "NonAdmin" na ON f.user_id = na.user_id
                 LEFT JOIN "SampleWork" sw ON s.service_id = sw.service_id
                 WHERE s.service_id = %s
             """
@@ -210,11 +212,12 @@ async def get_service_details(service_id: int):
                 sid, title, category, description, delivery_time,
                 hourly_price, package_tier, status, average_rating,
                 freelancer_id, tagline, freelancer_rating, total_orders, total_reviews,
-                sample_work,
+                sample_work, freelancer_name
             ) = row
 
             freelancer = FreelancerSummary(
                 user_id=freelancer_id,
+                username=freelancer_name,
                 tagline=tagline,
                 avg_rating=float(freelancer_rating) if isinstance(freelancer_rating, Decimal) else freelancer_rating,
                 total_orders=total_orders,
