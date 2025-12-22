@@ -21,8 +21,6 @@ import Profile from '../pages/Profile';
 import Register from '../pages/Register';
 import Seller from '../pages/Seller';
 import ServiceDetail from '../pages/ServiceDetail';
-import CreateService from '../pages/CreateService';
-import MyServices from '../pages/MyServices';
 import Withdrawals from '../pages/Withdrawals';
 import Services from '../pages/Services';
 import { ThemeModeContext } from './main';
