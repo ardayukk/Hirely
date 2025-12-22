@@ -208,9 +208,9 @@ export default function OrderDetail() {
     const handleComplete = async () => {
         try {
             await axiosInstance.patch(`/api/orders/${orderId}/complete?client_id=${user.id}`);
+            // Optional refresh, then redirect to main/home
             await fetchOrder();
-            alert('Payment released to freelancer. Order completed.');
-            openReviewDialog();
+            navigate('/home', { replace: true });
         } catch (err) {
             alert(err.response?.data?.detail || 'Failed to approve and release payment');
         }

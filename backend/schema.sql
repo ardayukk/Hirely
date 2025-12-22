@@ -152,6 +152,26 @@ CREATE TABLE IF NOT EXISTS "Deliverable" (
     FOREIGN KEY (order_id) REFERENCES "BigOrder"(order_id) ON DELETE CASCADE
 );
 
+-- Delivery submissions (freelancer -> client)
+CREATE TABLE IF NOT EXISTS "Delivery" (
+    delivery_id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    freelancer_id INTEGER NOT NULL,
+    message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "DeliveryFile" (
+    file_id SERIAL PRIMARY KEY,
+    delivery_id INTEGER NOT NULL,
+    file_path TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    upload_date TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (delivery_id) REFERENCES "Delivery"(delivery_id) ON DELETE CASCADE
+);
+
 -- ============================================
 -- REVISION ENTITY
 -- ============================================
@@ -551,6 +571,20 @@ BEGIN
     EXCEPTION WHEN others THEN
         NULL;
     END;
+
+    -- Ensure Payment.released exists
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Payment' AND column_name = 'released'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Payment" ADD COLUMN released BOOLEAN DEFAULT FALSE';
+        EXECUTE 'UPDATE "Payment" SET released = FALSE WHERE released IS NULL';
+        BEGIN
+            EXECUTE 'ALTER TABLE "Payment" ALTER COLUMN released SET DEFAULT FALSE';
+        EXCEPTION WHEN others THEN
+            NULL;
+        END;
+    END IF;
 END $$;
 
 DROP TABLE IF EXISTS "reported" CASCADE;

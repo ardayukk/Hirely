@@ -13,6 +13,7 @@ import CreateService from '../pages/CreateService';
 import FreelancerWorkspace from '../pages/FreelancerWorkspace';
 import Home from '../pages/Home';
 import Inbox from '../pages/Inbox';
+import Earnings from '../pages/Earnings';
 import Login from '../pages/Login';
 import Logout from '../pages/Logout';
 import MyServices from '../pages/MyServices';
@@ -58,6 +59,7 @@ function AppContent() {
                             <Button component={Link} to="/home#user" variant="text">User</Button>
                             <Button component={Link} to="/home#admin" variant="text">Admin</Button>
                             <Button component={Link} to="/services" variant="text">Services</Button>
+                            <Button component={Link} to="/earnings" variant="text">Earnings</Button>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Button component={Link} to="/home">Home</Button>
@@ -88,6 +90,7 @@ function AppContent() {
                     <Route path="/inbox/:conversationId" element={requireAuth(<OrderDetail />)} />
                     <Route path="/services" element={requireAuth(<Services />)} />
                     <Route path="/services/:serviceId" element={requireAuth(<ServiceDetail />)} />
+                    <Route path="/earnings" element={requireAuth(<Earnings />)} />
                     <Route path="/create-service" element={requireAuth(<CreateService />)} />
                     <Route path="/myServices" element={requireAuth(<MyServices />)} />
                     <Route path="/analytics" element={requireAuth(<Analytics />)} />

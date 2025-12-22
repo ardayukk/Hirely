@@ -13,6 +13,7 @@ from backend.routers import (
     disputes,
     analytics,
     withdrawals,
+    earnings,
 )
 
 # Hirely API
@@ -39,6 +40,7 @@ app.include_router(messages.router, prefix="/api")
 app.include_router(disputes.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
 app.include_router(withdrawals.router)
+app.include_router(earnings.router, prefix="/api")
 
 @app.get("/")
 def root():
