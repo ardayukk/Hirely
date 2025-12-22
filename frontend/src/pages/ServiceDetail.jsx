@@ -15,11 +15,12 @@ import {
   FormControlLabel,
 } from "@mui/material";
 import colors from "../helper/colors";
-import { axiosInstance } from "../context/Authcontext";
+import { axiosInstance, useAuth } from "../context/Authcontext";
 
 export default function ServiceDetail() {
   const { serviceId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [service, setService] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedAddons, setSelectedAddons] = useState([]);
@@ -308,26 +309,48 @@ export default function ServiceDetail() {
 
             {/* Action Buttons */}
             <Box display="flex" gap={2} mt={4}>
-              <Button
-                variant="contained"
-                fullWidth
-                sx={{
-                  py: 1.5,
-                  background: `linear-gradient(90deg, ${colors.color2}, ${colors.color1})`,
-                  fontWeight: "bold",
-                  fontSize: 16,
-                  "&:hover": {
-                    background: `linear-gradient(90deg, ${colors.color1}, ${colors.color2})`,
-                  },
-                }}
-                onClick={() =>
-                  navigate(`/checkout/${service.service_id}`, {
-                    state: { selectedAddons },
-                  })
-                }
-              >
-                Order Now
-              </Button>
+              {service.freelancer?.user_id === undefined ? null : (
+                service.freelancer.user_id === (typeof window !== 'undefined' && window.localStorage.getItem('hirely_user') ? JSON.parse(window.localStorage.getItem('hirely_user')).id : null)
+                  ? (
+                      <Button
+                        variant="contained"
+                        fullWidth
+                        sx={{
+                          py: 1.5,
+                          background: `linear-gradient(90deg, ${colors.color2}, ${colors.color1})`,
+                          fontWeight: "bold",
+                          fontSize: 16,
+                          "&:hover": {
+                            background: `linear-gradient(90deg, ${colors.color1}, ${colors.color2})`,
+                          },
+                        }}
+                        onClick={() => navigate(`/services/${service.service_id}/edit`)}
+                      >
+                        Edit Service
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="contained"
+                        fullWidth
+                        sx={{
+                          py: 1.5,
+                          background: `linear-gradient(90deg, ${colors.color2}, ${colors.color1})`,
+                          fontWeight: "bold",
+                          fontSize: 16,
+                          "&:hover": {
+                            background: `linear-gradient(90deg, ${colors.color1}, ${colors.color2})`,
+                          },
+                        }}
+                        onClick={() =>
+                          navigate(`/checkout/${service.service_id}`, {
+                            state: { selectedAddons },
+                          })
+                        }
+                      >
+                        Order Now
+                      </Button>
+                    )
+              )}
               <Button
                 variant="outlined"
                 sx={{
@@ -340,7 +363,10 @@ export default function ServiceDetail() {
                     backgroundColor: colors.color4,
                   },
                 }}
-                onClick={() => window.history.back()}
+                onClick={() => {
+                  const isOwner = service.freelancer?.user_id === user?.id;
+                  navigate(isOwner ? "/myServices" : "/services");
+                }}
               >
                 Back
               </Button>

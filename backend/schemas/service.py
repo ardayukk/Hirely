@@ -14,6 +14,16 @@ class ServiceCreate(BaseModel):
     addon_service_ids: Optional[List[int]] = None
 
 
+class ServiceUpdate(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+    delivery_time: Optional[int] = None  # in days
+    hourly_price: Optional[float] = None
+    package_tier: Optional[str] = None
+    sample_work: Optional[str] = None
+
+
 class ServicePublic(BaseModel):
     service_id: int
     title: str

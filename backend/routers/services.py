@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from backend.db import get_connection
 from backend.schemas.service import (
     ServiceCreate,
+    ServiceUpdate,
     ServicePublic,
     ServiceDetail,
     FreelancerSummary,
@@ -415,3 +416,76 @@ async def get_freelancer_services(freelancer_id: int):
                 for r in rows
             ]
             return services
+
+
+@router.patch("/{service_id}", response_model=ServicePublic)
+async def update_service(service_id: int, payload: ServiceUpdate, freelancer_id: int = Query(...)):
+    """
+    Update service fields if the requesting freelancer owns the service.
+    Editable fields: title, category, description, delivery_time, hourly_price, package_tier.
+    Also upserts sample_work when provided.
+    """
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify ownership via create_service
+            await cur.execute(
+                'SELECT 1 FROM create_service WHERE service_id = %s AND freelancer_id = %s',
+                (service_id, freelancer_id),
+            )
+            if not await cur.fetchone():
+                raise HTTPException(status_code=403, detail="Not allowed to edit this service")
+
+            # Build dynamic SET for Service columns
+            set_clauses = []
+            params = []
+            mapping = {
+                "title": payload.title,
+                "category": payload.category,
+                "description": payload.description,
+                "delivery_time": payload.delivery_time,
+                "hourly_price": payload.hourly_price,
+                "package_tier": payload.package_tier,
+            }
+            for column, value in mapping.items():
+                if value is not None:
+                    set_clauses.append(f'{column} = %s')
+                    params.append(value)
+
+            try:
+                if set_clauses:
+                    params.append(service_id)
+                    query = f'UPDATE "Service" SET {", ".join(set_clauses)} WHERE service_id = %s'
+                    await cur.execute(query, tuple(params))
+
+                # Upsert sample work if provided
+                if payload.sample_work is not None:
+                    await cur.execute(
+                        'INSERT INTO "SampleWork" (service_id, sample_work) VALUES (%s, %s)\n'
+                        'ON CONFLICT (service_id) DO UPDATE SET sample_work = EXCLUDED.sample_work',
+                        (service_id, payload.sample_work),
+                    )
+
+                await conn.commit()
+
+                # Return updated service
+                await cur.execute(
+                    'SELECT service_id, title, category, description, delivery_time, hourly_price, package_tier, status, average_rating FROM "Service" WHERE service_id = %s',
+                    (service_id,),
+                )
+                row = await cur.fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail="Service not found")
+                return ServicePublic(
+                    service_id=row[0],
+                    title=row[1],
+                    category=row[2],
+                    description=row[3],
+                    delivery_time=row[4],
+                    hourly_price=float(row[5]) if isinstance(row[5], Decimal) else row[5],
+                    package_tier=row[6],
+                    status=row[7],
+                    average_rating=float(row[8]) if isinstance(row[8], Decimal) else row[8],
+                )
+            except Exception as e:
+                await conn.rollback()
+                raise HTTPException(status_code=400, detail=f"Failed to update service: {str(e)}")

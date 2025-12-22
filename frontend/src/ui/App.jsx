@@ -20,6 +20,7 @@ import Admin from '../pages/AdminDisputes';
 import Workspace from '../pages/Workspace';
 import Services from '../pages/Services';
 import ServiceDetail from '../pages/ServiceDetail';
+import EditService from '../pages/EditService';
 import CreateService from '../pages/CreateService';
 import MyServices from '../pages/MyServices';
 import { ThemeModeContext } from './main';
@@ -86,6 +87,7 @@ function AppContent() {
                 <Route path="/inbox/:conversationId" element={requireAuth(<OrderDetail />)} />
                 <Route path="/services" element={requireAuth(<Services />)} />
                 <Route path="/services/:serviceId" element={requireAuth(<ServiceDetail />)} />
+                <Route path="/services/:serviceId/edit" element={requireAuth(<EditService />)} />
                 <Route path="/create-service" element={requireAuth(<CreateService />)} />
                 <Route path="/myServices" element={requireAuth(<MyServices />)} />
                 <Route path="/logout" element={<Logout />} />

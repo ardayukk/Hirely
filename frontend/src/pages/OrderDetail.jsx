@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Typography, Box, Paper, Divider, Button, Chip, Grid, Alert, CircularProgress } from '@mui/material';
+import { Container, Typography, Box, Paper, Divider, Button, Chip, Grid, Alert, CircularProgress, TextField } from '@mui/material';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { axiosInstance, useAuth } from '../context/Authcontext';
 import ChatComposer from '../components/ChatComposer';
@@ -19,6 +19,10 @@ export default function OrderDetail() {
   const [messageError, setMessageError] = useState('');
   const [disputeLoading, setDisputeLoading] = useState(false);
   const [disputeError, setDisputeError] = useState('');
+  const [deliveryFile, setDeliveryFile] = useState(null);
+  const [deliveryNote, setDeliveryNote] = useState('');
+  const [deliverySending, setDeliverySending] = useState(false);
+  const [deliveryError, setDeliveryError] = useState('');
 
   useEffect(() => {
     fetchOrder();
@@ -64,14 +68,22 @@ export default function OrderDetail() {
     }
   };
 
-  const handleSendMessage = async ({ text }) => {
-    if (!text?.trim()) return;
+  const handleSendMessage = async ({ text, file }) => {
     try {
       setSending(true);
-      await axiosInstance.post(`/api/messages?sender_id=${user.id}`, {
-        order_id: Number(orderId),
-        message_text: text,
-      });
+      if (file) {
+        const form = new FormData();
+        form.append('order_id', String(orderId));
+        form.append('message_text', text || '');
+        form.append('file', file);
+        await axiosInstance.post(`/api/messages/upload?sender_id=${user.id}`, form);
+      } else {
+        if (!text?.trim()) return;
+        await axiosInstance.post(`/api/messages?sender_id=${user.id}`, {
+          order_id: Number(orderId),
+          message_text: text,
+        });
+      }
       await loadMessages();
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to send message');
@@ -91,12 +103,34 @@ export default function OrderDetail() {
   };
 
   const handleDeliver = async () => {
+    if (!deliveryFile) {
+      setDeliveryError('Please attach the final file before delivering.');
+      return;
+    }
     try {
+      setDeliverySending(true);
+      setDeliveryError('');
+
+      // First, upload the delivery file via messages so both sides can access it
+      const form = new FormData();
+      form.append('order_id', String(orderId));
+      form.append('message_text', deliveryNote || 'Final delivery');
+      form.append('file', deliveryFile);
+      await axiosInstance.post(`/api/messages/upload?sender_id=${user.id}`, form);
+
+      // Then mark the order as delivered
       await axiosInstance.patch(`/api/orders/${orderId}/deliver?freelancer_id=${user.id}`);
+
       await fetchOrder();
+      await loadMessages();
+      setDeliveryFile(null);
+      setDeliveryNote('');
       alert('Order marked as delivered');
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to deliver order');
+      const detail = err.response?.data?.detail || 'Failed to deliver order';
+      setDeliveryError(detail);
+    } finally {
+      setDeliverySending(false);
     }
   };
 
@@ -272,9 +306,48 @@ export default function OrderDetail() {
             )}
 
             {isFreelancer && order.status === 'in_progress' && (
-              <Button fullWidth variant="contained" sx={{ mb: 1 }} onClick={handleDeliver}>
-                Mark as Delivered
-              </Button>
+              <>
+                <Box sx={{ border: '1px dashed', borderColor: 'grey.400', borderRadius: 1, p: 2, mb: 1 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Attach final delivery</Typography>
+                  <Button
+                    variant="outlined"
+                    component="label"
+                    sx={{ mr: 1, mb: 1 }}
+                    disabled={deliverySending}
+                  >
+                    {deliveryFile ? 'Change file' : 'Choose file'}
+                    <input
+                      type="file"
+                      hidden
+                      onChange={(e) => setDeliveryFile(e.target.files?.[0] || null)}
+                    />
+                  </Button>
+                  {deliveryFile && (
+                    <Typography variant="body2" sx={{ mb: 1 }}>{deliveryFile.name}</Typography>
+                  )}
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    placeholder="Optional delivery note"
+                    value={deliveryNote}
+                    onChange={(e) => setDeliveryNote(e.target.value)}
+                    disabled={deliverySending}
+                  />
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    sx={{ mt: 1 }}
+                    onClick={handleDeliver}
+                    disabled={deliverySending}
+                  >
+                    {deliverySending ? 'Uploading...' : 'Upload & Mark as Delivered'}
+                  </Button>
+                  {deliveryError && (
+                    <Alert severity="error" sx={{ mt: 1 }}>{deliveryError}</Alert>
+                  )}
+                </Box>
+              </>
             )}
 
             {isClient && order.status === 'delivered' && (
@@ -349,6 +422,16 @@ export default function OrderDetail() {
                         {fromMe ? 'You' : m.sender_name || `User ${m.sender_id}`}
                       </Typography>
                       <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{m.message_text}</Typography>
+                      {m.file_id && m.file_name && (
+                        <Typography variant="body2" sx={{ mt: 0.5 }}>
+                          {(() => {
+                            const fileUrl = `${axiosInstance.defaults.baseURL}/api/messages/files/${m.file_id}`;
+                            return (
+                              <>Attachment: <a href={fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: fromMe ? '#fff' : undefined }}>{m.file_name}</a></>
+                            );
+                          })()}
+                        </Typography>
+                      )}
                       <Typography variant="caption" sx={{ display: 'block', opacity: 0.7 }}>
                         {new Date(m.timestamp).toLocaleString()}
                       </Typography>

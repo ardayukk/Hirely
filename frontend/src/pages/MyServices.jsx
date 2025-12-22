@@ -116,7 +116,7 @@ export default function MyServices() {
                     },
                     cursor: "pointer",
                   }}
-                  onClick={() => (window.location.href = `/services/${service.service_id}`)}
+                  onClick={() => (window.location.href = `/services/${service.service_id}/edit`)}
                 >
                   <CardContent>
                     <Typography
