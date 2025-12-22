@@ -697,38 +697,60 @@ async def submit_delivery(
 
 @router.patch("/{order_id}/complete")
 async def complete_order(order_id: int, client_id: int = Query(...)):
-    """Client accepts delivery and marks order as completed"""
+    """Client approves delivery and releases payment to freelancer."""
     async with get_connection() as conn:
         async with conn.cursor() as cur:
-            await cur.execute(
-                '''
-                SELECT mo.client_id, fo.freelancer_id, p.payment_id, p.amount, p.released
-                FROM make_order mo
-                JOIN finish_order fo ON mo.order_id = fo.order_id
-                JOIN "Payment" p ON fo.payment_id = p.payment_id
-                WHERE mo.order_id = %s
-                ''',
-                (order_id,),
-            )
-            row = await cur.fetchone()
-            if not row or row[0] != client_id:
-                raise HTTPException(status_code=403, detail="Order does not belong to client")
-
-            _, freelancer_id, payment_id, amount, released = row
-
-            # Mark order completed
-            await cur.execute('UPDATE "Order" SET status = %s WHERE order_id = %s', ("completed", order_id))
-
-            # Release payment only once
-            if not released:
-                await cur.execute('UPDATE "Payment" SET released = TRUE, payment_date = NOW() WHERE payment_id = %s', (payment_id,))
+            try:
+                # Fetch order + payment context
                 await cur.execute(
-                    'UPDATE "NonAdmin" SET wallet_balance = COALESCE(wallet_balance, 0) + %s WHERE user_id = %s',
-                    (amount, freelancer_id),
+                    '''
+                    SELECT mo.client_id, fo.freelancer_id, p.payment_id, p.amount, p.released, o.status
+                    FROM make_order mo
+                    JOIN finish_order fo ON mo.order_id = fo.order_id
+                    JOIN "Payment" p ON fo.payment_id = p.payment_id
+                    JOIN "Order" o ON mo.order_id = o.order_id
+                    WHERE mo.order_id = %s
+                    ''',
+                    (order_id,),
                 )
+                row = await cur.fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail="Order not found")
+                if row[0] != client_id:
+                    raise HTTPException(status_code=403, detail="Order does not belong to client")
 
-            await conn.commit()
-            return {"message": "Order completed and payment released"}
+                _, freelancer_id, payment_id, amount, released, status = row
+
+                # Only allow approval if delivered (or revision requested but delivered later)
+                if status not in ("delivered", "revision_requested", "in_progress", "pending"):
+                    # If already completed/cancelled, no-op
+                    if status == "completed":
+                        return {"message": "Order already completed"}
+                    if status == "cancelled":
+                        raise HTTPException(status_code=400, detail="Cancelled orders cannot be approved")
+
+                # Mark order completed
+                await cur.execute('UPDATE "Order" SET status = %s WHERE order_id = %s', ("completed", order_id))
+
+                # Release payment only once
+                if not released:
+                    if amount is None:
+                        raise HTTPException(status_code=400, detail="Payment amount is missing for this order")
+                    await cur.execute('UPDATE "Payment" SET released = TRUE, payment_date = NOW() WHERE payment_id = %s', (payment_id,))
+                    await cur.execute(
+                        'UPDATE "NonAdmin" SET wallet_balance = COALESCE(wallet_balance, 0) + %s WHERE user_id = %s',
+                        (amount, freelancer_id),
+                    )
+
+                await conn.commit()
+                return {"message": "Order completed and payment released"}
+            except HTTPException:
+                # Pass through known errors
+                await conn.rollback()
+                raise
+            except Exception as e:
+                await conn.rollback()
+                raise HTTPException(status_code=400, detail=f"Failed to approve and release payment: {str(e)}")
 
 
 @router.post("/{order_id}/review", response_model=ReviewPublic, status_code=201)
