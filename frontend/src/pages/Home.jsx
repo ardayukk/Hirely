@@ -31,6 +31,7 @@ export default function Home() {
                             { label: "My services", to: "/myServices" },
                             { label: "Orders", to: "/orders" },
                             { label: "Inbox", to: "/inbox" },
+                            { label: "Withdrawals", to: "/withdrawals" },
                         ]}
                     />
 

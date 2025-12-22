@@ -365,6 +365,65 @@ async def cancel_order(order_id: int, client_id: int = Query(...)):
             return {"message": "Order cancelled"}
 
 
+@router.patch("/{order_id}/reject")
+async def reject_order(order_id: int, freelancer_id: int = Query(...), reason: str = Query(None)):
+    """Freelancer rejects a pending order (auto-refund to client)"""
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify order belongs to freelancer and is pending
+            await cur.execute(
+                '''
+                SELECT mo.client_id, fo.freelancer_id, p.payment_id, p.amount, p.released
+                FROM "Order" o
+                JOIN make_order mo ON o.order_id = mo.order_id
+                LEFT JOIN finish_order fo ON o.order_id = fo.order_id
+                LEFT JOIN "Payment" p ON fo.payment_id = p.payment_id
+                WHERE o.order_id = %s
+                ''',
+                (order_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Order not found")
+            if row[1] != freelancer_id:
+                raise HTTPException(status_code=403, detail="Order does not belong to freelancer")
+
+            client_id, _, payment_id, amount, released = row
+
+            # Check if order is still pending (can only reject pending orders)
+            await cur.execute('SELECT status FROM "Order" WHERE order_id = %s', (order_id,))
+            status_row = await cur.fetchone()
+            if status_row and status_row[0] != 'pending':
+                raise HTTPException(status_code=400, detail="Can only reject pending orders")
+
+            # Record rejection
+            await cur.execute(
+                'INSERT INTO reject (order_id, freelancer_id, client_id, reason) VALUES (%s, %s, %s, %s)',
+                (order_id, freelancer_id, client_id, reason),
+            )
+
+            # Refund to client (mark payment as not released to ensure it doesn't go to freelancer)
+            if payment_id and not released:
+                await cur.execute(
+                    'UPDATE "Payment" SET released = FALSE WHERE payment_id = %s',
+                    (payment_id,),
+                )
+                # Restore amount to client wallet
+                await cur.execute(
+                    'UPDATE "NonAdmin" SET wallet_balance = COALESCE(wallet_balance, 0) + %s WHERE user_id = %s',
+                    (amount, client_id),
+                )
+
+            # Update order status to rejected
+            await cur.execute(
+                'UPDATE "Order" SET status = %s WHERE order_id = %s',
+                ("rejected", order_id),
+            )
+
+            await conn.commit()
+            return {"message": "Order rejected and refund processed"}
+
+
 @router.post("/{order_id}/revisions", response_model=RevisionPublic, status_code=201)
 async def request_revision(order_id: int, revision: RevisionCreate, client_id: int = Query(...)):
     """Client requests a revision"""

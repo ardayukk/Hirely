@@ -22,6 +22,7 @@ import Services from '../pages/Services';
 import ServiceDetail from '../pages/ServiceDetail';
 import CreateService from '../pages/CreateService';
 import MyServices from '../pages/MyServices';
+import Withdrawals from '../pages/Withdrawals';
 import { ThemeModeContext } from './main';
 
 function AppContent() {
@@ -88,6 +89,7 @@ function AppContent() {
                 <Route path="/services/:serviceId" element={requireAuth(<ServiceDetail />)} />
                 <Route path="/create-service" element={requireAuth(<CreateService />)} />
                 <Route path="/myServices" element={requireAuth(<MyServices />)} />
+                <Route path="/withdrawals" element={requireAuth(<Withdrawals />)} />
                 <Route path="/logout" element={<Logout />} />
 
                 <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />
