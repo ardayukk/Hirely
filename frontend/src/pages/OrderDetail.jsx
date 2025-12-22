@@ -205,6 +205,10 @@ export default function OrderDetail() {
         }
     };
 
+    const openReviewDialog = () => {
+        setReviewDialogOpen(true);
+    };
+
     const handleComplete = async () => {
         try {
             await axiosInstance.patch(`/api/orders/${orderId}/complete?client_id=${user.id}`);

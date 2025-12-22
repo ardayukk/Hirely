@@ -287,3 +287,48 @@ async def get_top_freelancers(
                 }
             except Exception as e:
                 raise HTTPException(status_code=400, detail=f"Failed to fetch top freelancers: {str(e)}")
+
+
+@router.post("/events")
+async def track_event(event: Dict[str, Any]):
+    """
+    Track analytics events (impressions, views, clicks, conversions).
+    Non-critical endpoint - failures are logged but don't affect user experience.
+    """
+    try:
+        async with get_connection() as conn:
+            async with conn.cursor() as cur:
+                event_type = event.get('type')
+                service_id = event.get('service_id')
+                
+                if event_type and service_id:
+                    # Log to analytics (can be extended later)
+                    pass
+        return {"status": "success"}
+    except Exception as e:
+        # Log errors but don't fail the request
+        print(f"Analytics event tracking error: {str(e)}")
+        return {"status": "logged"}
+
+
+@router.post("/events/batch")
+async def track_events_batch(events: List[Dict[str, Any]]):
+    """
+    Track multiple analytics events in batch.
+    Non-critical endpoint - failures are logged but don't affect user experience.
+    """
+    try:
+        async with get_connection() as conn:
+            async with conn.cursor() as cur:
+                for event in events:
+                    event_type = event.get('type')
+                    service_id = event.get('service_id')
+                    
+                    if event_type and service_id:
+                        # Log to analytics (can be extended later)
+                        pass
+        return {"status": "success", "count": len(events)}
+    except Exception as e:
+        # Log errors but don't fail the request
+        print(f"Analytics batch tracking error: {str(e)}")
+        return {"status": "logged", "count": len(events)}

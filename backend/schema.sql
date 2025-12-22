@@ -667,3 +667,22 @@ CREATE TABLE "Withdrawal" (
     FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE,
     FOREIGN KEY (withdrawal_method_id) REFERENCES "WithdrawalMethod"(method_id) ON DELETE RESTRICT
 );
+
+-- NPS Survey: Net Promoter Score and satisfaction surveys
+CREATE TABLE IF NOT EXISTS "NPSSurvey" (
+    survey_id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    client_id INTEGER NOT NULL,
+    freelancer_id INTEGER NOT NULL,
+    nps_score INTEGER CHECK (nps_score >= 0 AND nps_score <= 10),
+    satisfaction_rating INTEGER CHECK (satisfaction_rating >= 1 AND satisfaction_rating <= 5),
+    response_time_rating INTEGER CHECK (response_time_rating >= 1 AND response_time_rating <= 5),
+    quality_rating INTEGER CHECK (quality_rating >= 1 AND quality_rating <= 5),
+    communication_rating INTEGER CHECK (communication_rating >= 1 AND communication_rating <= 5),
+    would_repeat BOOLEAN DEFAULT NULL,
+    comments TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
+    FOREIGN KEY (client_id) REFERENCES "Client"(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE
+);

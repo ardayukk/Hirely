@@ -596,3 +596,17 @@ async def delete_service(service_id: int, freelancer_id: int = Query(...)):
             except Exception as e:
                 await conn.rollback()
                 raise HTTPException(status_code=400, detail=f"Failed to delete service: {str(e)}")
+
+
+@router.get("/categories", response_model=List[str])
+async def get_categories():
+    """
+    Get all available service categories.
+    """
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute("""
+                SELECT DISTINCT category FROM "Service" WHERE category IS NOT NULL ORDER BY category
+            """)
+            rows = await cur.fetchall()
+            return [row[0] for row in rows]
