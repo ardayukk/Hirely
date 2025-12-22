@@ -34,6 +34,10 @@ class OrderPublic(BaseModel):
     requirements: Optional[Dict[str, Any]] = None
     required_hours: Optional[int] = None
     addon_service_ids: Optional[List[int]] = None
+    service_title: Optional[str] = None
+    client_name: Optional[str] = None
+    freelancer_name: Optional[str] = None
+    delivery_date: Optional[datetime] = None
 
 
 class OrderDetail(OrderPublic):
