@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Container, Tabs, Tab, Box, Typography } from '@mui/material';
+import { Box, Container, Tab, Tabs, Typography } from '@mui/material';
+import { useState } from 'react';
+import CategoryTrends from '../components/CategoryTrends';
+import { useAuth } from '../context/Authcontext';
 import AdminDisputes from './AdminDisputes';
 import TopFreelancersAnalytics from './TopFreelancersAnalytics';
-import { useAuth } from '../context/Authcontext';
 
 export default function Admin() {
     const { user } = useAuth();
@@ -30,11 +31,13 @@ export default function Admin() {
             <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
                 <Tab label="Disputes" />
                 <Tab label="Top Freelancers" />
+                <Tab label="Category Trends" />
             </Tabs>
 
             <Box sx={{ mt: 2 }}>
                 {activeTab === 0 && <AdminDisputes />}
                 {activeTab === 1 && <TopFreelancersAnalytics />}
+                {activeTab === 2 && <CategoryTrends />}
             </Box>
         </Container>
     );

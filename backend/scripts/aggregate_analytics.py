@@ -67,6 +67,37 @@ async def aggregate_daily_metrics(target_date: date):
             
             print(f"✅ Aggregation for {target_date} completed.")
 
+async def aggregate_category_metrics(target_date: date):
+    print(f"Aggregating category metrics for {target_date}...")
+    conn = await psycopg.AsyncConnection.connect(**db_config)
+    async with conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                INSERT INTO "CategoryDailyMetrics" (metric_date, category, total_orders, total_revenue, avg_order_value, unique_buyers)
+                SELECT
+                    DATE(o.order_date) as metric_date,
+                    s.category,
+                    COUNT(o.order_id) as total_orders,
+                    SUM(o.total_price) as total_revenue,
+                    AVG(o.total_price) as avg_order_value,
+                    COUNT(DISTINCT mo.client_id) as unique_buyers
+                FROM "Order" o
+                JOIN "make_order" mo ON o.order_id = mo.order_id
+                JOIN "Service" s ON mo.service_id = s.service_id
+                WHERE DATE(o.order_date) = %s AND o.status != 'cancelled'
+                GROUP BY 1, 2
+                ON CONFLICT (metric_date, category) 
+                DO UPDATE SET
+                    total_orders = EXCLUDED.total_orders,
+                    total_revenue = EXCLUDED.total_revenue,
+                    avg_order_value = EXCLUDED.avg_order_value,
+                    unique_buyers = EXCLUDED.unique_buyers;
+                """,
+                (target_date,)
+            )
+            print(f"✅ Category metrics aggregated for {target_date}")
+
 async def main():
     # Aggregate for today and yesterday to ensure data is up to date
     today = date.today()
@@ -74,6 +105,9 @@ async def main():
     
     await aggregate_daily_metrics(yesterday)
     await aggregate_daily_metrics(today)
+    
+    await aggregate_category_metrics(yesterday)
+    await aggregate_category_metrics(today)
 
 if __name__ == "__main__":
     if os.name == 'nt':

@@ -48,6 +48,34 @@ class DailyMetricResponse(BaseModel):
     service_id: int
     date: date
     views_count: int
+
+class CategoryTrendMetric(BaseModel):
+    date: date
+    category: str
+    total_orders: int
+    total_revenue: float
+    avg_order_value: float
+    unique_buyers: int
+
+class CategoryGrowthMetric(BaseModel):
+    category: str
+    current_period_revenue: float
+    previous_period_revenue: float
+    growth_rate: float
+    total_orders: int
+
+class CategoryMetadataUpdate(BaseModel):
+    is_promoted: Optional[bool] = None
+    recruitment_needed: Optional[bool] = None
+    notes: Optional[str] = None
+
+class CategoryMetadataResponse(BaseModel):
+    category: str
+    is_promoted: bool
+    recruitment_needed: bool
+    notes: Optional[str]
+    updated_at: datetime
+
     clicks_count: int
     orders_count: int
     impressions_count: Optional[int] = 0

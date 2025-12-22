@@ -5,13 +5,120 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from backend.db import get_connection
 from backend.schemas.analytics import (
     AnalyticsSummary, CategoryMetric, AnalyticsSnapshot,
-    ServiceEventCreate, DailyMetricResponse, FreelancerAnalyticsSummary
+    ServiceEventCreate, DailyMetricResponse, FreelancerAnalyticsSummary,
+    CategoryTrendMetric, CategoryGrowthMetric, CategoryMetadataUpdate, CategoryMetadataResponse
 )
 from backend.repositories.analytics_repo import AnalyticsRepository
 from backend.core.security import get_current_user, get_current_user_optional
 from backend.schemas.user import UserResponse
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
+
+
+@router.get("/categories/trends", response_model=List[CategoryTrendMetric])
+async def get_category_trends(
+    start_date: date = Query(..., description="Start date for the range"),
+    end_date: date = Query(..., description="End date for the range"),
+    categories: Optional[List[str]] = Query(None, description="List of categories to filter by")
+):
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            query = """
+                SELECT metric_date, category, total_orders, total_revenue, avg_order_value, unique_buyers
+                FROM "CategoryDailyMetrics"
+                WHERE metric_date BETWEEN %s AND %s
+            """
+            params = [start_date, end_date]
+            
+            if categories:
+                query += " AND category = ANY(%s)"
+                params.append(categories)
+            
+            query += " ORDER BY metric_date ASC, category ASC"
+            
+            await cur.execute(query, params)
+            rows = await cur.fetchall()
+            
+            return [
+                CategoryTrendMetric(
+                    date=row[0],
+                    category=row[1],
+                    total_orders=row[2],
+                    total_revenue=float(row[3]),
+                    avg_order_value=float(row[4]),
+                    unique_buyers=row[5]
+                )
+                for row in rows
+            ]
+
+@router.get("/categories/growth", response_model=List[CategoryGrowthMetric])
+async def get_category_growth(
+    period: str = Query("month", enum=["week", "month"]),
+    reference_date: date = Query(default=date.today())
+):
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Calculate date ranges based on period
+            if period == "week":
+                current_start = reference_date - timedelta(days=reference_date.weekday())
+                current_end = current_start + timedelta(weeks=1)
+                prev_start = current_start - timedelta(weeks=1)
+                prev_end = current_start
+            else: # month
+                current_start = reference_date.replace(day=1)
+                # Next month first day
+                if current_start.month == 12:
+                    current_end = current_start.replace(year=current_start.year + 1, month=1)
+                else:
+                    current_end = current_start.replace(month=current_start.month + 1)
+                
+                # Previous month calculation
+                if current_start.month == 1:
+                    prev_start = current_start.replace(year=current_start.year - 1, month=12)
+                else:
+                    prev_start = current_start.replace(month=current_start.month - 1)
+                prev_end = current_start
+            
+            query = """
+                WITH current_period AS (
+                    SELECT category, SUM(total_revenue) as revenue, SUM(total_orders) as orders
+                    FROM "CategoryDailyMetrics"
+                    WHERE metric_date >= %s AND metric_date < %s
+                    GROUP BY category
+                ),
+                previous_period AS (
+                    SELECT category, SUM(total_revenue) as revenue
+                    FROM "CategoryDailyMetrics"
+                    WHERE metric_date >= %s AND metric_date < %s
+                    GROUP BY category
+                )
+                SELECT 
+                    COALESCE(c.category, p.category) as category,
+                    COALESCE(c.revenue, 0) as current_revenue,
+                    COALESCE(p.revenue, 0) as prev_revenue,
+                    COALESCE(c.orders, 0) as total_orders
+                FROM current_period c
+                FULL OUTER JOIN previous_period p ON c.category = p.category
+            """
+            
+            await cur.execute(query, (current_start, current_end, prev_start, prev_end))
+            rows = await cur.fetchall()
+            
+            results = []
+            for row in rows:
+                curr_rev = float(row[1])
+                prev_rev = float(row[2])
+                growth = ((curr_rev - prev_rev) / prev_rev * 100) if prev_rev > 0 else (100.0 if curr_rev > 0 else 0.0)
+                
+                results.append(CategoryGrowthMetric(
+                    category=row[0],
+                    current_period_revenue=curr_rev,
+                    previous_period_revenue=prev_rev,
+                    growth_rate=growth,
+                    total_orders=row[3]
+                ))
+            
+            return results
 
 
 @router.get("/summary", response_model=AnalyticsSummary)
@@ -287,3 +394,63 @@ async def get_top_freelancers(
                 }
             except Exception as e:
                 raise HTTPException(status_code=400, detail=f"Failed to fetch top freelancers: {str(e)}")
+
+@router.get("/categories/metadata", response_model=List[CategoryMetadataResponse])
+async def get_category_metadata():
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute('SELECT category, is_promoted, recruitment_needed, notes, updated_at FROM "CategoryMetadata"')
+            rows = await cur.fetchall()
+            return [
+                CategoryMetadataResponse(
+                    category=row[0],
+                    is_promoted=row[1],
+                    recruitment_needed=row[2],
+                    notes=row[3],
+                    updated_at=row[4]
+                )
+                for row in rows
+            ]
+
+@router.post("/categories/{category}/metadata", response_model=CategoryMetadataResponse)
+async def update_category_metadata(category: str, metadata: CategoryMetadataUpdate):
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Check if exists
+            await cur.execute('SELECT category FROM "CategoryMetadata" WHERE category = %s', (category,))
+            exists = await cur.fetchone()
+            
+            if not exists:
+                await cur.execute(
+                    'INSERT INTO "CategoryMetadata" (category, is_promoted, recruitment_needed, notes) VALUES (%s, %s, %s, %s)',
+                    (category, metadata.is_promoted or False, metadata.recruitment_needed or False, metadata.notes)
+                )
+            else:
+                updates = []
+                params = []
+                if metadata.is_promoted is not None:
+                    updates.append("is_promoted = %s")
+                    params.append(metadata.is_promoted)
+                if metadata.recruitment_needed is not None:
+                    updates.append("recruitment_needed = %s")
+                    params.append(metadata.recruitment_needed)
+                if metadata.notes is not None:
+                    updates.append("notes = %s")
+                    params.append(metadata.notes)
+                
+                if updates:
+                    updates.append("updated_at = NOW()")
+                    params.append(category)
+                    await cur.execute(f'UPDATE "CategoryMetadata" SET {", ".join(updates)} WHERE category = %s', params)
+            
+            await cur.execute('SELECT category, is_promoted, recruitment_needed, notes, updated_at FROM "CategoryMetadata" WHERE category = %s', (category,))
+            row = await cur.fetchone()
+            await conn.commit()
+            
+            return CategoryMetadataResponse(
+                category=row[0],
+                is_promoted=row[1],
+                recruitment_needed=row[2],
+                notes=row[3],
+                updated_at=row[4]
+            )
