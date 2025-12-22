@@ -3,8 +3,8 @@ from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Query
 
-from db import get_connection
-from schemas.service import (
+from backend.db import get_connection
+from backend.schemas.service import (
     ServiceCreate,
     ServicePublic,
     ServiceDetail,
@@ -29,10 +29,26 @@ async def create_service(service: ServiceCreate, freelancer_id: int = Query(...)
     """
     async with get_connection() as conn:
         async with conn.cursor() as cur:
-            # Verify freelancer exists
+            # Ensure user exists; if not, 404
+            await cur.execute('SELECT user_id FROM "User" WHERE user_id = %s', (freelancer_id,))
+            if not await cur.fetchone():
+                raise HTTPException(status_code=404, detail="User not found")
+
+            # Ensure NonAdmin row exists (needed for Freelancer FK)
+            await cur.execute('SELECT user_id FROM "NonAdmin" WHERE user_id = %s', (freelancer_id,))
+            if not await cur.fetchone():
+                await cur.execute(
+                    'INSERT INTO "NonAdmin" (user_id, name, biography, wallet_balance) VALUES (%s, %s, %s, %s)',
+                    (freelancer_id, f"User {freelancer_id}", "", 0.0)
+                )
+
+            # Ensure Freelancer row exists
             await cur.execute('SELECT user_id FROM "Freelancer" WHERE user_id = %s', (freelancer_id,))
             if not await cur.fetchone():
-                raise HTTPException(status_code=404, detail="Freelancer not found")
+                await cur.execute(
+                    'INSERT INTO "Freelancer" (user_id, tagline, avg_rating, total_orders, total_reviews) VALUES (%s, %s, %s, %s, %s)',
+                    (freelancer_id, "", 0.00, 0, 0)
+                )
 
             try:
                 # 1. Insert into Service

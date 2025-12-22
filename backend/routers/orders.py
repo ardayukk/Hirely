@@ -3,8 +3,8 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime, timedelta
 
-from db import get_connection
-from schemas.order import (
+from backend.db import get_connection
+from backend.schemas.order import (
     OrderCreate,
     OrderPublic,
     OrderDetail,

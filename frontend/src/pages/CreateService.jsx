@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
@@ -18,6 +19,7 @@ import { useAuth, axiosInstance } from "../context/Authcontext";
 
 export default function CreateService() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [service, setService] = useState({
     title: "",
@@ -37,12 +39,7 @@ export default function CreateService() {
     e.preventDefault();
 
     if (!user?.id) {
-      alert("You must be logged in as a freelancer to create a service.");
-      return;
-    }
-
-    if (user.role !== "freelancer") {
-      alert("Only freelancers can create services.");
+      alert("You must be logged in to create a service.");
       return;
     }
 
@@ -62,15 +59,7 @@ export default function CreateService() {
       const res = await axiosInstance.post(`/api/services?freelancer_id=${user.id}`, payload);
 
       alert(`Service "${res.data.title}" created successfully!`);
-      setService({
-        title: "",
-        category: "",
-        description: "",
-        delivery_time: "",
-        hourly_price: "",
-        package_tier: "",
-        sample_work: "",
-      });
+      navigate(`/services/${res.data.service_id}`);
     } catch (err) {
       console.error("Failed to create service", err);
       alert(err.response?.data?.detail || "Failed to create service. Please try again.");

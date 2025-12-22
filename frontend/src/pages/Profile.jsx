@@ -14,7 +14,7 @@ import colors from "../helper/colors";
 import { useAuth, axiosInstance } from "../context/Authcontext.jsx";
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState({
@@ -78,7 +78,12 @@ export default function Profile() {
   const handleDevRole = async (role) => {
     if (!user?.id) return;
     try {
-      await axiosInstance.post("/api/auth/dev/set-role", { user_id: user.id, role });
+      const roleRes = await axiosInstance.post("/api/auth/dev/set-role", { user_id: user.id, role });
+      // Update auth context with new role
+      const updatedUser = { ...user, role: roleRes.data.role, username: roleRes.data.username };
+      setUser(updatedUser);
+      localStorage.setItem('hirely_user', JSON.stringify(updatedUser));
+      
       // Refresh profile to reflect the new role
       const res = await axiosInstance.get(`/api/users/${user.id}`);
       const data = res.data;
@@ -88,7 +93,7 @@ export default function Profile() {
         role: data.role,
         organization: data.address || "",
       });
-      alert(`Role set to ${role} (dev only). Re-login if navigation depends on role.`);
+      alert(`Role changed to ${role}. Access updated immediately.`);
     } catch (err) {
       console.error("Failed to set role", err);
       alert(err.response?.data?.detail || "Failed to set role");

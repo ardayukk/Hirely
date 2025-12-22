@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Container, Grid, Box, Typography, Select, MenuItem, TextField, Button, Alert } from '@mui/material';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { Container, Grid, Box, Typography, Select, MenuItem, TextField, Button, Alert, Checkbox, FormControlLabel, Divider } from '@mui/material';
 import { axiosInstance, useAuth } from '../context/Authcontext';
 
 export default function Checkout() {
   const { serviceId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [service, setService] = useState(null);
@@ -13,12 +14,19 @@ export default function Checkout() {
   const [milestoneCount, setMilestoneCount] = useState(3);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedAddons, setSelectedAddons] = useState(location.state?.selectedAddons || []);
 
   useEffect(() => {
     const fetchService = async () => {
       try {
         const res = await axiosInstance.get(`/api/services/${serviceId}`);
         setService(res.data);
+        // Keep only addons that still exist
+        if (res.data?.addons?.length) {
+          setSelectedAddons((prev) => prev.filter((id) => res.data.addons.some((a) => a.service_id === id)));
+        } else {
+          setSelectedAddons([]);
+        }
       } catch (err) {
         console.error('Failed to load service', err);
         setError('Could not load service details');
@@ -26,6 +34,18 @@ export default function Checkout() {
     };
     if (serviceId) fetchService();
   }, [serviceId]);
+
+  const toggleAddon = (id) => {
+    setSelectedAddons((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const addonsTotal = service?.addons
+    ? service.addons
+        .filter((a) => selectedAddons.includes(a.service_id))
+        .reduce((sum, a) => sum + (a.hourly_price || 0), 0)
+    : 0;
+  const basePrice = service?.hourly_price || 0;
+  const totalPrice = basePrice + addonsTotal;
 
   const handlePlaceOrder = async () => {
     if (!user || user.role !== 'client') {
@@ -42,7 +62,7 @@ export default function Checkout() {
 
       const payload = {
         service_id: parseInt(serviceId),
-        total_price: service.hourly_price || 100,
+        total_price: totalPrice || 0,
         order_type: orderType,
         delivery_date: normalizedDelivery,
         milestone_count: orderType === 'big' ? normalizedMilestones : null,
@@ -84,6 +104,25 @@ export default function Checkout() {
             <Typography variant="h6" sx={{ mt: 2 }}>
               ${service.hourly_price ? service.hourly_price.toFixed(2) : 'N/A'}/hr
             </Typography>
+
+            {service.addons && service.addons.length > 0 && (
+              <Box sx={{ mt: 3 }}>
+                <Divider sx={{ mb: 2 }} />
+                <Typography variant="subtitle1" gutterBottom>Add-ons</Typography>
+                {service.addons.map((addon) => (
+                  <FormControlLabel
+                    key={addon.service_id}
+                    control={
+                      <Checkbox
+                        checked={selectedAddons.includes(addon.service_id)}
+                        onChange={() => toggleAddon(addon.service_id)}
+                      />
+                    }
+                    label={`${addon.title} — $${addon.hourly_price ? addon.hourly_price.toFixed(2) : '0.00'}/hr`}
+                  />
+                ))}
+              </Box>
+            )}
           </Box>
 
           <Box sx={{ mt: 3 }}>
@@ -126,15 +165,21 @@ export default function Checkout() {
             <Typography variant="h6" gutterBottom>Order Summary</Typography>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Typography>Service Price:</Typography>
-              <Typography>${service.hourly_price ? service.hourly_price.toFixed(2) : 'N/A'}</Typography>
+              <Typography>${service.hourly_price ? service.hourly_price.toFixed(2) : '0.00'}</Typography>
             </Box>
+            {service.addons && service.addons.length > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Typography>Add-ons:</Typography>
+                <Typography>${addonsTotal.toFixed(2)}</Typography>
+              </Box>
+            )}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
               <Typography>Type:</Typography>
               <Typography>{orderType === 'small' ? 'Small' : 'Big (Milestones)'}</Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', mt: 2, pt: 2, borderTop: '1px solid #e0e0e0' }}>
               <Typography>Total:</Typography>
-              <Typography>${service.hourly_price ? service.hourly_price.toFixed(2) : 'N/A'}</Typography>
+              <Typography>${totalPrice.toFixed(2)}</Typography>
             </Box>
 
             <Button

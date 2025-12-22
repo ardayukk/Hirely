@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   Avatar,
   Box,
@@ -11,14 +11,18 @@ import {
   Grid,
   Typography,
   Fade,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import colors from "../helper/colors";
 import { axiosInstance } from "../context/Authcontext";
 
 export default function ServiceDetail() {
   const { serviceId } = useParams();
+  const navigate = useNavigate();
   const [service, setService] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedAddons, setSelectedAddons] = useState([]);
 
   useEffect(() => {
     const fetchServiceDetail = async () => {
@@ -26,6 +30,12 @@ export default function ServiceDetail() {
         setLoading(true);
         const res = await axiosInstance.get(`/api/services/${serviceId}`);
         setService(res.data);
+        // Preselect none; preserve existing selection if IDs still present
+        if (res.data?.addons?.length) {
+          setSelectedAddons((prev) => prev.filter((id) => res.data.addons.some((a) => a.service_id === id)));
+        } else {
+          setSelectedAddons([]);
+        }
       } catch (err) {
         console.error("Failed to load service details", err);
       } finally {
@@ -53,6 +63,12 @@ export default function ServiceDetail() {
       </Box>
     );
   }
+
+  const toggleAddon = (id) => {
+    setSelectedAddons((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
 
   if (!service) {
     return (
@@ -258,19 +274,30 @@ export default function ServiceDetail() {
                             p: 2,
                             backgroundColor: colors.color4,
                             borderRadius: 2,
-                            cursor: "pointer",
-                            "&:hover": {
-                              boxShadow: `0 4px 15px ${colors.color3}`,
-                            },
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: 1,
                           }}
-                          onClick={() => (window.location.href = `/services/${addon.service_id}`)}
                         >
-                          <Typography variant="body1" sx={{ fontWeight: "bold", color: colors.color1 }}>
-                            {addon.title}
-                          </Typography>
-                          <Typography variant="body2" sx={{ color: colors.color3 }}>
-                            ${addon.hourly_price ? addon.hourly_price.toFixed(2) : "N/A"}/hr | ★ {addon.average_rating.toFixed(1)}
-                          </Typography>
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={selectedAddons.includes(addon.service_id)}
+                                onChange={() => toggleAddon(addon.service_id)}
+                                color="primary"
+                              />
+                            }
+                            label={
+                              <Box onClick={() => toggleAddon(addon.service_id)} sx={{ cursor: "pointer" }}>
+                                <Typography variant="body1" sx={{ fontWeight: "bold", color: colors.color1 }}>
+                                  {addon.title}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: colors.color3 }}>
+                                  ${addon.hourly_price ? addon.hourly_price.toFixed(2) : "N/A"}/hr | ★ {addon.average_rating.toFixed(1)}
+                                </Typography>
+                              </Box>
+                            }
+                          />
                         </Card>
                       </Grid>
                     ))}
@@ -293,7 +320,11 @@ export default function ServiceDetail() {
                     background: `linear-gradient(90deg, ${colors.color1}, ${colors.color2})`,
                   },
                 }}
-                onClick={() => (window.location.href = `/checkout/${service.service_id}`)}
+                onClick={() =>
+                  navigate(`/checkout/${service.service_id}`, {
+                    state: { selectedAddons },
+                  })
+                }
               >
                 Order Now
               </Button>
