@@ -55,13 +55,15 @@ export default function Analytics() {
             if (!selectedService) return;
             try {
                 const [metricsRes, summaryRes] = await Promise.all([
-                    axiosInstance.get(`/api/analytics/metrics/${selectedService}?start_date=${dateRange.start}&end_date=${dateRange.end}`),
-                    axiosInstance.get(`/api/analytics/summary/${selectedService}?start_date=${dateRange.start}&end_date=${dateRange.end}`)
+                    axiosInstance.get(`/api/analytics/metrics/${selectedService}?start_date=${dateRange.start}&end_date=${dateRange.end}`).catch(() => ({ data: [] })),
+                    axiosInstance.get(`/api/analytics/summary/${selectedService}?start_date=${dateRange.start}&end_date=${dateRange.end}`).catch(() => ({ data: null }))
                 ]);
-                setMetrics(metricsRes.data);
-                setSummary(summaryRes.data);
+                setMetrics(metricsRes.data || []);
+                setSummary(summaryRes.data || null);
             } catch (err) {
                 console.error("Failed to fetch metrics", err);
+                setMetrics([]);
+                setSummary(null);
             }
         };
         fetchMetrics();
@@ -157,38 +159,62 @@ export default function Analytics() {
                 </Grid>
             )}
 
-            <TableContainer component={Paper}>
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>Date</TableCell>
-                            <TableCell align="right">Impressions</TableCell>
-                            <TableCell align="right">Views</TableCell>
-                            <TableCell align="right">Clicks</TableCell>
-                            <TableCell align="right">Orders</TableCell>
-                            <TableCell align="right">CTR</TableCell>
-                            <TableCell align="right">Conversion Rate</TableCell>
-                            <TableCell align="right">Earnings</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {metrics.map((row) => (
-                            <TableRow key={row.date}>
-                                <TableCell component="th" scope="row">
-                                    {row.date}
-                                </TableCell>
-                                <TableCell align="right">{row.impressions_count}</TableCell>
-                                <TableCell align="right">{row.views_count}</TableCell>
-                                <TableCell align="right">{row.clicks_count}</TableCell>
-                                <TableCell align="right">{row.orders_count}</TableCell>
-                                <TableCell align="right">{(row.ctr * 100).toFixed(2)}%</TableCell>
-                                <TableCell align="right">{(row.conversion_rate * 100).toFixed(2)}%</TableCell>
-                                <TableCell align="right">${row.total_earnings.toFixed(2)}</TableCell>
+            {!selectedService && services.length === 0 ? (
+                <Paper sx={{ p: 3, textAlign: 'center', bgcolor: colors.color5 }}>
+                    <Typography variant="body1" color="textSecondary">
+                        You don't have any services yet. Create a service to start tracking analytics.
+                    </Typography>
+                </Paper>
+            ) : !selectedService ? (
+                <Paper sx={{ p: 3, textAlign: 'center', bgcolor: colors.color5 }}>
+                    <Typography variant="body1" color="textSecondary">
+                        Select a service to view analytics.
+                    </Typography>
+                </Paper>
+            ) : (
+                <TableContainer component={Paper}>
+                    <Table>
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Date</TableCell>
+                                <TableCell align="right">Impressions</TableCell>
+                                <TableCell align="right">Views</TableCell>
+                                <TableCell align="right">Clicks</TableCell>
+                                <TableCell align="right">Orders</TableCell>
+                                <TableCell align="right">CTR</TableCell>
+                                <TableCell align="right">Conversion Rate</TableCell>
+                                <TableCell align="right">Earnings</TableCell>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+                        </TableHead>
+                        <TableBody>
+                            {metrics.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
+                                        <Typography color="textSecondary">
+                                            No analytics data available for this period.
+                                        </Typography>
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                metrics.map((row) => (
+                                    <TableRow key={row.date}>
+                                        <TableCell component="th" scope="row">
+                                            {row.date}
+                                        </TableCell>
+                                        <TableCell align="right">{row.impressions_count}</TableCell>
+                                        <TableCell align="right">{row.views_count}</TableCell>
+                                        <TableCell align="right">{row.clicks_count}</TableCell>
+                                        <TableCell align="right">{row.orders_count}</TableCell>
+                                        <TableCell align="right">{(row.ctr * 100).toFixed(2)}%</TableCell>
+                                        <TableCell align="right">{(row.conversion_rate * 100).toFixed(2)}%</TableCell>
+                                        <TableCell align="right">${row.total_earnings.toFixed(2)}</TableCell>
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            )}
         </Container>
     );
 }
