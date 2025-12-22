@@ -41,6 +41,9 @@ export default function OrderDetail() {
     const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
     const [reviewData, setReviewData] = useState({ rating: 5, comment: '', highlights: '' });
     const [submittingReview, setSubmittingReview] = useState(false);
+    const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+    const [rejectReason, setRejectReason] = useState('');
+    const [rejectingOrder, setRejectingOrder] = useState(false);
     const [deliveryOpen, setDeliveryOpen] = useState(false);
     const [deliveryFiles, setDeliveryFiles] = useState([]);
     const [deliveryNote, setDeliveryNote] = useState('');
@@ -50,25 +53,6 @@ export default function OrderDetail() {
     useEffect(() => {
         fetchOrder();
     }, [orderId]);
-
-    useEffect(() => {
-        if (!order?.delivery_date) return;
-        const calculateTimeLeft = () => {
-            const now = new Date();
-            const due = new Date(order.delivery_date);
-            const diff = due - now;
-            if (diff < 0) {
-                setTimeLeft('Overdue');
-                return;
-            }
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            setTimeLeft(`${days}d ${hours}h left`);
-        };
-        calculateTimeLeft();
-        const timer = setInterval(calculateTimeLeft, 60000);
-        return () => clearInterval(timer);
-    }, [order]);
 
     useEffect(() => {
         if (chatOpen) {
@@ -147,6 +131,23 @@ export default function OrderDetail() {
             alert('Order accepted and started!');
         } catch (err) {
             alert(err.response?.data?.detail || 'Failed to accept order');
+        }
+    };
+
+    const handleReject = async () => {
+        try {
+            setRejectingOrder(true);
+            await axiosInstance.patch(
+                `/api/orders/${orderId}/reject?freelancer_id=${user.id}&reason=${encodeURIComponent(rejectReason || '')}`
+            );
+            await fetchOrder();
+            setRejectDialogOpen(false);
+            setRejectReason('');
+            alert('Order rejected and client refunded');
+        } catch (err) {
+            alert(err.response?.data?.detail || 'Failed to reject order');
+        } finally {
+            setRejectingOrder(false);
         }
     };
 
@@ -410,6 +411,23 @@ export default function OrderDetail() {
                         <Divider sx={{ mb: 2 }} />
 
                         {isFreelancer && order.status === 'pending' && (
+                            <>
+                                <Button fullWidth variant="contained" sx={{ mb: 1 }} onClick={handleAccept}>
+                                    Accept Order
+                                </Button>
+                                <Button 
+                                    fullWidth 
+                                    variant="outlined" 
+                                    color="error"
+                                    sx={{ mb: 1 }} 
+                                    onClick={() => setRejectDialogOpen(true)}
+                                >
+                                    Reject Order
+                                </Button>
+                            </>
+                        )}
+
+                        {isFreelancer && order.status === 'pending' && (
                             <Button fullWidth variant="contained" sx={{ mb: 1 }} onClick={handleAccept}>
                                 Accept Order
                             </Button>
@@ -578,6 +596,41 @@ export default function OrderDetail() {
                         disabled={submittingReview || !reviewData.rating}
                     >
                         {submittingReview ? 'Submitting...' : 'Submit Review'}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* Reject Dialog */}
+            <Dialog open={rejectDialogOpen} onClose={() => !rejectingOrder && setRejectDialogOpen(false)} maxWidth="sm" fullWidth>
+                <DialogTitle>Reject Order</DialogTitle>
+                <DialogContent>
+                    <Box sx={{ pt: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            Are you sure you want to reject this order? The client will be refunded automatically.
+                        </Typography>
+                        <TextField
+                            label="Reason (Optional)"
+                            multiline
+                            rows={3}
+                            value={rejectReason}
+                            onChange={(e) => setRejectReason(e.target.value)}
+                            fullWidth
+                            placeholder="Please tell the client why you're rejecting this order..."
+                            disabled={rejectingOrder}
+                        />
+                    </Box>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setRejectDialogOpen(false)} disabled={rejectingOrder}>
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleReject}
+                        variant="contained"
+                        color="error"
+                        disabled={rejectingOrder}
+                    >
+                        {rejectingOrder ? 'Rejecting...' : 'Reject Order'}
                     </Button>
                 </DialogActions>
             </Dialog>

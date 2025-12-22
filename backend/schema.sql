@@ -581,3 +581,55 @@ CREATE TABLE "cancel" (
     FOREIGN KEY (admin_id) REFERENCES "Admin"(user_id) ON DELETE CASCADE
 );
 
+DROP TABLE IF EXISTS "reject" CASCADE;
+
+CREATE TABLE "reject" (
+    rejection_id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL UNIQUE,
+    freelancer_id INTEGER NOT NULL,
+    client_id INTEGER NOT NULL,
+    reason TEXT,
+    rejection_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (client_id) REFERENCES "Client"(user_id) ON DELETE CASCADE
+);
+
+-- ============================================
+-- WITHDRAWAL MANAGEMENT SYSTEM
+-- ============================================
+
+DROP TABLE IF EXISTS "WithdrawalMethod" CASCADE;
+
+CREATE TABLE "WithdrawalMethod" (
+    method_id SERIAL PRIMARY KEY,
+    freelancer_id INTEGER NOT NULL,
+    method_type TEXT NOT NULL CHECK (method_type IN ('bank_account', 'paypal', 'stripe')),
+    account_holder_name TEXT NOT NULL,
+    account_number TEXT,
+    bank_name TEXT,
+    swift_code TEXT,
+    paypal_email TEXT,
+    is_default BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE
+);
+
+DROP TABLE IF EXISTS "Withdrawal" CASCADE;
+
+CREATE TABLE "Withdrawal" (
+    withdrawal_id SERIAL PRIMARY KEY,
+    freelancer_id INTEGER NOT NULL,
+    withdrawal_method_id INTEGER NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL CHECK (amount > 0),
+    fee DECIMAL(10, 2) DEFAULT 0.00,
+    net_amount DECIMAL(10, 2) NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'cancelled')),
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    processing_started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    notes TEXT,
+    transaction_reference TEXT,
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (withdrawal_method_id) REFERENCES "WithdrawalMethod"(method_id) ON DELETE RESTRICT
+);

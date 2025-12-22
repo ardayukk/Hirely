@@ -33,6 +33,7 @@ export default function Home() {
                             { label: "Orders", to: "/orders" },
                             { label: "Inbox", to: "/inbox" },
                             { label: "Analytics", to: "/analytics" },
+                            { label: "Withdrawals", to: "/withdrawals" },
                         ]}
                     />
 
@@ -51,7 +52,7 @@ export default function Home() {
                         title="Admin"
                         actions={[
                             { label: "Admin panel", to: "/admin", variant: "contained" },
-                            { label: "Manage users", to: "/admin" },
+                            { label: "Analytics", to: "/admin" },
                         ]}
                     />
 

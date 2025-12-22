@@ -27,12 +27,14 @@ def create_database():
         cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (DB_NAME,))
         exists = cur.fetchone()
         
-        if not exists:
-            print(f"Creating database {DB_NAME}...")
-            cur.execute(f"CREATE DATABASE {DB_NAME}")
-            print(f"Database {DB_NAME} created successfully.")
-        else:
-            print(f"Database {DB_NAME} already exists.")
+        if exists:
+            print(f"Dropping existing database {DB_NAME}...")
+            cur.execute(f"DROP DATABASE {DB_NAME}")
+            print(f"Database {DB_NAME} dropped successfully.")
+        
+        print(f"Creating database {DB_NAME}...")
+        cur.execute(f"CREATE DATABASE {DB_NAME}")
+        print(f"Database {DB_NAME} created successfully.")
             
         cur.close()
         conn.close()

@@ -5,7 +5,7 @@ import { useContext } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/Authcontext'; // ✅ import your Auth hook (fixed relative path & filename case)
 import { MockApiProvider } from '../context/MockApiProvider';
-import Admin from '../pages/AdminDisputes';
+import Admin from '../pages/Admin';
 import Analytics from '../pages/Analytics';
 import Checkout from '../pages/Checkout';
 import ClientWorkspace from '../pages/Client';
@@ -23,6 +23,7 @@ import Register from '../pages/Register';
 import Seller from '../pages/Seller';
 import ServiceDetail from '../pages/ServiceDetail';
 import Services from '../pages/Services';
+import Withdrawals from '../pages/Withdrawals';
 import { ThemeModeContext } from './main';
 
 function AppContent() {
@@ -90,11 +91,12 @@ function AppContent() {
                     <Route path="/create-service" element={requireAuth(<CreateService />)} />
                     <Route path="/myServices" element={requireAuth(<MyServices />)} />
                     <Route path="/analytics" element={requireAuth(<Analytics />)} />
+                    <Route path="/withdrawals" element={requireAuth(<Withdrawals />)} />
                     <Route path="/logout" element={<Logout />} />
 
                     <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />
-                </Routes>
-            </MockApiProvider>
+                </Routes >
+            </MockApiProvider >
         </>
     );
 }
