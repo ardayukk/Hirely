@@ -10,7 +10,6 @@ class ServiceCreate(BaseModel):
     delivery_time: Optional[int] = None  # in days
     hourly_price: Optional[float] = None
     package_tier: Optional[str] = None
-    revision_limit: Optional[int] = 1  # Default 1, None for unlimited
     sample_work: Optional[str] = None
     addon_service_ids: Optional[List[int]] = None
 
@@ -23,7 +22,6 @@ class ServicePublic(BaseModel):
     delivery_time: Optional[int] = None
     hourly_price: Optional[float] = None
     package_tier: Optional[str] = None
-    revision_limit: Optional[int] = None
     status: str
     average_rating: float
 
@@ -52,7 +50,6 @@ class ServiceDetail(BaseModel):
     delivery_time: Optional[int] = None
     hourly_price: Optional[float] = None
     package_tier: Optional[str] = None
-    revision_limit: Optional[int] = None
     status: str
     average_rating: float
     freelancer: FreelancerSummary

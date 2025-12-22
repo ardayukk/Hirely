@@ -68,7 +68,7 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                 # Get service and freelancer
                 await cur.execute(
                     '''
-                    SELECT s.service_id, cs.freelancer_id, s.package_tier, s.revision_limit
+                    SELECT s.service_id, cs.freelancer_id, s.package_tier
                     FROM "Service" s
                     JOIN create_service cs ON s.service_id = cs.service_id
                     WHERE s.service_id = %s
@@ -78,7 +78,17 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                 service_row = await cur.fetchone()
                 if not service_row:
                     raise HTTPException(status_code=404, detail="Service not found")
-                service_id, freelancer_id, package_tier, included_revision_limit = service_row
+                service_id, freelancer_id, package_tier = service_row
+                
+                # Determine included_revision_limit based on package_tier
+                if package_tier and package_tier.lower() == 'basic':
+                    included_revision_limit = 1
+                elif package_tier and package_tier.lower() == 'standard':
+                    included_revision_limit = 3
+                elif package_tier and package_tier.lower() == 'premium':
+                    included_revision_limit = None
+                else:
+                    included_revision_limit = 1  # Default
 
                 # 1. Create base order
                 requirements_json = json.dumps(order.requirements) if getattr(order, 'requirements', None) is not None else None
