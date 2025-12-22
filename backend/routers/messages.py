@@ -8,8 +8,8 @@ import os
 from collections import defaultdict
 import asyncio
 
-from db import get_connection
-from schemas.message import (
+from backend.db import get_connection
+from backend.schemas.message import (
     MessageCreate,
     MessagePublic,
     ConversationMessage,

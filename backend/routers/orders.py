@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime, timedelta
 import json
 
-from db import get_connection
+from backend.db import get_connection
 
 
 def _safe_json_load(raw):
@@ -12,7 +12,7 @@ def _safe_json_load(raw):
         return json.loads(raw) if raw else None
     except Exception:
         return None
-from schemas.order import (
+from backend.schemas.order import (
     OrderCreate,
     OrderPublic,
     OrderDetail,
