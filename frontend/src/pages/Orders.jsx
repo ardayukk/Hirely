@@ -23,10 +23,12 @@ export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [orderDetails, setOrderDetails] = useState({});
   const [loading, setLoading] = useState(false);
+  const [wallet, setWallet] = useState(null);
 
   useEffect(() => {
     if (!user?.id) return;
     fetchOrders();
+    fetchWallet();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -57,6 +59,18 @@ export default function Orders() {
     }
   };
 
+  const fetchWallet = async () => {
+    if (!user?.id) return;
+    try {
+      const res = await axiosInstance.get(`/api/users/${user.id}`);
+      if (res?.data?.wallet_balance !== undefined) {
+        setWallet(res.data.wallet_balance);
+      }
+    } catch (err) {
+      // non-blocking
+    }
+  };
+
   const getStatusColor = (status) => {
     const colors = {
       pending: '#ff9800',
@@ -79,9 +93,18 @@ export default function Orders() {
 
   return (
     <Container sx={{ mt: 4 }}>
-      <Typography variant="h4" gutterBottom>
-        My Orders
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+        <Typography variant="h4" gutterBottom sx={{ mb: 0 }}>
+          My Orders
+        </Typography>
+        {user?.role === 'freelancer' && wallet !== null && (
+          <Chip
+            label={`Wallet: $${Number(wallet).toFixed(2)}`}
+            color="success"
+            sx={{ fontWeight: 'bold' }}
+          />
+        )}
+      </Box>
 
       {orders.length === 0 && <Typography color="text.secondary">No orders yet.</Typography>}
 

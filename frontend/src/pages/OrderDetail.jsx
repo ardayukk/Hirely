@@ -119,9 +119,9 @@ export default function OrderDetail() {
     try {
       await axiosInstance.patch(`/api/orders/${orderId}/complete?client_id=${user.id}`);
       await fetchOrder();
-      alert('Order completed');
+      alert('Payment released to freelancer. Order completed.');
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to complete order');
+      alert(err.response?.data?.detail || 'Failed to approve and release payment');
     }
   };
 
@@ -310,7 +310,7 @@ export default function OrderDetail() {
             {isClient && order.status === 'delivered' && (
               <>
                 <Button fullWidth variant="contained" color="success" sx={{ mb: 1 }} onClick={handleComplete}>
-                  Accept Delivery
+                  Approve & Release Payment
                 </Button>
                 <Button fullWidth variant="outlined" sx={{ mb: 1 }} onClick={handleRequestRevision}>
                   Request Revision
