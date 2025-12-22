@@ -39,8 +39,8 @@ async def create_service(service: ServiceCreate, freelancer_id: int = Query(...)
                 # 1. Insert into Service
                 await cur.execute(
                     """
-                    INSERT INTO "Service" (title, category, description, delivery_time, hourly_price, package_tier, status, average_rating)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO "Service" (title, category, description, delivery_time, hourly_price, package_tier, revision_limit, status, average_rating)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING service_id
                     """,
                     (
@@ -50,6 +50,7 @@ async def create_service(service: ServiceCreate, freelancer_id: int = Query(...)
                         service.delivery_time,
                         service.hourly_price,
                         service.package_tier,
+                        service.revision_limit,
                         "ACTIVE",
                         0.0,
                     ),
@@ -89,7 +90,7 @@ async def create_service(service: ServiceCreate, freelancer_id: int = Query(...)
 
                 # Return created service
                 await cur.execute(
-                    'SELECT service_id, title, category, description, delivery_time, hourly_price, package_tier, status, average_rating FROM "Service" WHERE service_id = %s',
+                    'SELECT service_id, title, category, description, delivery_time, hourly_price, package_tier, revision_limit, status, average_rating FROM "Service" WHERE service_id = %s',
                     (service_id,),
                 )
                 row = await cur.fetchone()
@@ -101,8 +102,9 @@ async def create_service(service: ServiceCreate, freelancer_id: int = Query(...)
                     delivery_time=row[4],
                     hourly_price=float(row[5]) if isinstance(row[5], Decimal) else row[5],
                     package_tier=row[6],
-                    status=row[7],
-                    average_rating=float(row[8]) if isinstance(row[8], Decimal) else row[8],
+                    revision_limit=row[7],
+                    status=row[8],
+                    average_rating=float(row[9]) if isinstance(row[9], Decimal) else row[9],
                 )
 
             except Exception as e:
@@ -128,7 +130,7 @@ async def browse_services(
     async with get_connection() as conn:
         async with conn.cursor() as cur:
             query = """
-                SELECT service_id, title, category, description, delivery_time, hourly_price, package_tier, status, average_rating
+                SELECT service_id, title, category, description, delivery_time, hourly_price, package_tier, revision_limit, status, average_rating
                 FROM "Service" s
                 WHERE (%s::TEXT IS NULL OR s.category = %s)
                   AND (%s::NUMERIC IS NULL OR s.hourly_price >= %s)
@@ -174,8 +176,9 @@ async def browse_services(
                         delivery_time=row[4],
                         hourly_price=float(row[5]) if isinstance(row[5], Decimal) else row[5],
                         package_tier=row[6],
-                        status=row[7],
-                        average_rating=float(row[8]) if isinstance(row[8], Decimal) else row[8],
+                        revision_limit=row[7],
+                        status=row[8],
+                        average_rating=float(row[9]) if isinstance(row[9], Decimal) else row[9],
                     )
                 )
             return services
@@ -193,7 +196,7 @@ async def get_service_details(service_id: int):
             query = """
                 SELECT
                   s.service_id, s.title, s.category, s.description, s.delivery_time,
-                  s.hourly_price, s.package_tier, s.status, s.average_rating,
+                  s.hourly_price, s.package_tier, s.revision_limit, s.status, s.average_rating,
                   f.user_id, f.tagline, f.avg_rating, f.total_orders, f.total_reviews,
                   sw.sample_work,
                   na.name
@@ -211,7 +214,7 @@ async def get_service_details(service_id: int):
 
             (
                 sid, title, category, description, delivery_time,
-                hourly_price, package_tier, status, average_rating,
+                hourly_price, package_tier, revision_limit, status, average_rating,
                 freelancer_id, tagline, freelancer_rating, total_orders, total_reviews,
                 sample_work, freelancer_name
             ) = row
@@ -242,7 +245,7 @@ async def get_service_details(service_id: int):
             # Fetch add-ons
             addons_query = """
                 SELECT s2.service_id, s2.title, s2.category, s2.description, s2.delivery_time,
-                       s2.hourly_price, s2.package_tier, s2.status, s2.average_rating
+                       s2.hourly_price, s2.package_tier, s2.revision_limit, s2.status, s2.average_rating
                 FROM add_on a
                 JOIN "Service" s2 ON (a.service_id2 = s2.service_id OR a.service_id1 = s2.service_id)
                 WHERE (a.service_id1 = %s OR a.service_id2 = %s) AND s2.service_id != %s
@@ -258,8 +261,9 @@ async def get_service_details(service_id: int):
                     delivery_time=ar[4],
                     hourly_price=float(ar[5]) if isinstance(ar[5], Decimal) else ar[5],
                     package_tier=ar[6],
-                    status=ar[7],
-                    average_rating=float(ar[8]) if isinstance(ar[8], Decimal) else ar[8],
+                    revision_limit=ar[7],
+                    status=ar[8],
+                    average_rating=float(ar[9]) if isinstance(ar[9], Decimal) else ar[9],
                 )
                 for ar in addon_rows
             ]
@@ -272,6 +276,7 @@ async def get_service_details(service_id: int):
                 delivery_time=delivery_time,
                 hourly_price=float(hourly_price) if isinstance(hourly_price, Decimal) else hourly_price,
                 package_tier=package_tier,
+                revision_limit=revision_limit,
                 status=status,
                 average_rating=float(average_rating) if isinstance(average_rating, Decimal) else average_rating,
                 freelancer=freelancer,

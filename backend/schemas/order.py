@@ -53,6 +53,8 @@ class RevisionCreate(BaseModel):
 
 class PurchaseRevisionsRequest(BaseModel):
     quantity: int
+    payment_ref: Optional[str] = None
+    amount: Optional[float] = 0.0
 
 
 class RevisionPublic(BaseModel):

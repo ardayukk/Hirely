@@ -26,19 +26,6 @@ from schemas.order import (
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 
-def _tier_included_revision_limit(package_tier: Optional[str]) -> Optional[int]:
-    """Return included revisions for a tier. None means unlimited."""
-    tier = (package_tier or "").strip().lower()
-    if tier == "basic":
-        return 1
-    if tier == "standard":
-        return 3
-    if tier == "premium":
-        return None
-    # If tier is unknown / missing, default to 1 to protect freelancers.
-    return 1
-
-
 def _revision_policy_fields(*, revision_count: int, included_revision_limit: Optional[int], extra_revisions_purchased: int):
     if included_revision_limit is None:
         return {
@@ -76,7 +63,7 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                 # Get service and freelancer
                 await cur.execute(
                     '''
-                    SELECT s.service_id, cs.freelancer_id, s.package_tier
+                    SELECT s.service_id, cs.freelancer_id, s.package_tier, s.revision_limit
                     FROM "Service" s
                     JOIN create_service cs ON s.service_id = cs.service_id
                     WHERE s.service_id = %s
@@ -86,9 +73,7 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                 service_row = await cur.fetchone()
                 if not service_row:
                     raise HTTPException(status_code=404, detail="Service not found")
-                service_id, freelancer_id, package_tier = service_row
-
-                included_revision_limit = _tier_included_revision_limit(package_tier)
+                service_id, freelancer_id, package_tier, included_revision_limit = service_row
 
                 # 1. Create base order
                 requirements_json = json.dumps(order.requirements) if order.requirements else None
@@ -495,6 +480,16 @@ async def purchase_additional_revisions(
                 'UPDATE "Order" SET extra_revisions_purchased = extra_revisions_purchased + %s WHERE order_id = %s',
                 (payload.quantity, order_id),
             )
+
+            # Record purchase
+            await cur.execute(
+                '''
+                INSERT INTO "RevisionPurchase" (order_id, purchased_revisions, amount, payment_ref)
+                VALUES (%s, %s, %s, %s)
+                ''',
+                (order_id, payload.quantity, payload.amount or 0.0, payload.payment_ref),
+            )
+
             await conn.commit()
 
     # Return fresh order detail

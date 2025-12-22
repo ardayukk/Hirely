@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS "Service" (
     delivery_time INTEGER,
     hourly_price DECIMAL(10, 2),
     package_tier TEXT,
+    revision_limit INTEGER DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'PAUSED')),
     average_rating DECIMAL(3, 2) DEFAULT 0.00,
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -159,6 +160,16 @@ CREATE TABLE IF NOT EXISTS "Revision" (
     revision_id SERIAL PRIMARY KEY,
     revision_text TEXT,
     revision_no INTEGER DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS "RevisionPurchase" (
+    purchase_id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    purchased_revisions INTEGER NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    payment_ref TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE
 );
 
 -- ============================================
