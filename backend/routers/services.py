@@ -406,7 +406,7 @@ async def get_freelancer_services(freelancer_id: int):
 
 
 # ============================================
-# SERVICE MANAGEMENT (Pause/Reactivate/Edit)
+# SERVICE MANAGEMENT (Pause/Reactivate/Edit/Delete)
 # ============================================
 
 @router.patch("/{service_id}", response_model=ServicePublic)
@@ -562,3 +562,38 @@ async def reactivate_service(service_id: int, freelancer_id: int = Query(...)):
                 status=row[7],
                 average_rating=float(row[8]) if isinstance(row[8], Decimal) else row[8],
             )
+
+
+@router.delete("/{service_id}", status_code=204)
+async def delete_service(service_id: int, freelancer_id: int = Query(...)):
+    """Delete a service. Only the owner freelancer can delete their own service."""
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify the service belongs to the freelancer
+            await cur.execute(
+                'SELECT service_id FROM create_service WHERE service_id = %s AND freelancer_id = %s',
+                (service_id, freelancer_id),
+            )
+            if not await cur.fetchone():
+                raise HTTPException(status_code=404, detail="Service not found or you don't own this service")
+            
+            # Check if service has active orders
+            await cur.execute(
+                '''
+                SELECT COUNT(*) FROM make_order mo
+                JOIN "Order" o ON mo.order_id = o.order_id
+                WHERE mo.service_id = %s AND o.status IN ('pending', 'in_progress')
+                ''',
+                (service_id,),
+            )
+            active_orders = (await cur.fetchone())[0]
+            if active_orders > 0:
+                raise HTTPException(status_code=400, detail="Cannot delete service with active orders")
+            
+            try:
+                # Delete the service (cascade will handle related tables)
+                await cur.execute('DELETE FROM "Service" WHERE service_id = %s', (service_id,))
+                await conn.commit()
+            except Exception as e:
+                await conn.rollback()
+                raise HTTPException(status_code=400, detail=f"Failed to delete service: {str(e)}")
