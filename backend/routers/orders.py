@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime, timedelta
 import json
 
-from db import get_connection
+from backend.db import get_connection
 
 
 def _safe_json_load(raw):
@@ -12,7 +12,7 @@ def _safe_json_load(raw):
         return json.loads(raw) if raw else None
     except Exception:
         return None
-from schemas.order import (
+from backend.schemas.order import (
     OrderCreate,
     OrderPublic,
     OrderDetail,
@@ -76,15 +76,13 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                 service_id, freelancer_id, package_tier, included_revision_limit = service_row
 
                 # 1. Create base order
-                requirements_json = json.dumps(order.requirements) if order.requirements else None
-                req_hours = order.required_hours if getattr(order, 'required_hours', None) is not None else None
                 await cur.execute(
                     '''
-                    INSERT INTO "Order" (order_date, status, revision_count, included_revision_limit, extra_revisions_purchased, total_price, review_given, requirements, required_hours)
-                    VALUES (NOW(), 'pending', 0, %s, 0, %s, FALSE, %s, %s)
+                    INSERT INTO "Order" (order_date, status, revision_count, included_revision_limit, extra_revisions_purchased, total_price, review_given)
+                    VALUES (NOW(), 'pending', 0, %s, 0, %s, FALSE)
                     RETURNING order_id
                     ''',
-                    (included_revision_limit, order.total_price, requirements_json, req_hours),
+                    (included_revision_limit, order.total_price),
                 )
                 order_id = (await cur.fetchone())[0]
 
@@ -156,7 +154,6 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                     service_id=service_id,
                     client_id=client_id,
                     freelancer_id=freelancer_id,
-                    required_hours=order.required_hours if getattr(order, 'required_hours', None) is not None else None,
                     addon_service_ids=getattr(order, 'addon_service_ids', None) or [],
                 )
 

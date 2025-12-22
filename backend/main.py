@@ -1,7 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import health, jobs, db_test, auth, users, services, orders, messages, disputes, analytics
+from backend.routers import (
+    health,
+    jobs,
+    db_test,
+    auth,
+    users,
+    services,
+    orders,
+    messages,
+    disputes,
+    analytics,
+)
 
 # Hirely API
 app = FastAPI(title="Hirely API", version="0.1.0")

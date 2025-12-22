@@ -1,8 +1,8 @@
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 
-from db import get_connection
-from schemas.dispute import DisputeCreate, DisputeResolve, DisputePublic
+from backend.db import get_connection
+from backend.schemas.dispute import DisputeCreate, DisputeResolve, DisputePublic
 
 router = APIRouter(prefix="/disputes", tags=["disputes"])
 

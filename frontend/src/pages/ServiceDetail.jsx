@@ -322,23 +322,50 @@ export default function ServiceDetail() {
               >
                 Back
               </Button>
-              {user && user.role === 'freelancer' && (
-                <Button
-                  variant="outlined"
-                  sx={{
-                    py: 1.5,
-                    px: 3,
-                    color: colors.color1,
-                    borderColor: colors.color1,
-                    fontWeight: "bold",
-                    "&:hover": {
-                      backgroundColor: colors.color4,
-                    },
-                  }}
-                  onClick={() => setOpenAddOn(true)}
-                >
-                  Create Add-on
-                </Button>
+              {user && user.role === 'freelancer' && service.freelancer.user_id === user.id && (
+                <>
+                  <Button
+                    variant="outlined"
+                    sx={{
+                      py: 1.5,
+                      px: 3,
+                      color: colors.color1,
+                      borderColor: colors.color1,
+                      fontWeight: "bold",
+                      "&:hover": {
+                        backgroundColor: colors.color4,
+                      },
+                    }}
+                    onClick={() => setOpenAddOn(true)}
+                  >
+                    Create Add-on
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    sx={{
+                      py: 1.5,
+                      px: 3,
+                      color: '#d32f2f',
+                      borderColor: '#d32f2f',
+                      fontWeight: "bold",
+                      "&:hover": {
+                        backgroundColor: '#ffebee',
+                      },
+                    }}
+                    onClick={async () => {
+                      if (!window.confirm('Are you sure you want to delete this service?')) return;
+                      try {
+                        await axiosInstance.delete(`/api/services/${serviceId}?freelancer_id=${user.id}`);
+                        alert('Service deleted successfully');
+                        window.location.href = '/services';
+                      } catch (err) {
+                        alert(err.response?.data?.detail || 'Failed to delete service');
+                      }
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </>
               )}
             </Box>
             {/* Add-on Creation Dialog */}

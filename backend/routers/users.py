@@ -3,8 +3,8 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 
-from db import get_connection
-from schemas.user import UserProfile, UserUpdate
+from backend.db import get_connection
+from backend.schemas.user import UserProfile, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
