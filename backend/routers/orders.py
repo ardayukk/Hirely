@@ -99,6 +99,20 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                     (order_id, payment_id, freelancer_id),
                 )
 
+                # 5. Optional add-ons selected by client
+                if getattr(order, 'addon_service_ids', None):
+                    for aid in order.addon_service_ids:
+                        # ensure addon is a valid add-on for this service
+                        await cur.execute(
+                            'SELECT 1 FROM add_on WHERE (service_id1 = %s AND service_id2 = %s) OR (service_id1 = %s AND service_id2 = %s) LIMIT 1',
+                            (service_id, aid, aid, service_id),
+                        )
+                        if await cur.fetchone():
+                            await cur.execute(
+                                'INSERT INTO order_addon (order_id, addon_service_id) VALUES (%s, %s) ON CONFLICT DO NOTHING',
+                                (order_id, aid),
+                            )
+
                 await conn.commit()
 
                 return OrderPublic(
@@ -112,6 +126,7 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                     client_id=client_id,
                     freelancer_id=freelancer_id,
                     required_hours=order.required_hours if getattr(order, 'required_hours', None) is not None else None,
+                    addon_service_ids=getattr(order, 'addon_service_ids', None) or [],
                 )
 
             except Exception as e:
@@ -154,6 +169,11 @@ async def get_orders(user_id: int = Query(...)):
             all_rows = client_rows + freelancer_rows
             orders = []
             for row in all_rows:
+                # fetch addon ids for this order
+                await cur.execute('SELECT addon_service_id FROM order_addon WHERE order_id = %s', (row[0],))
+                addon_rows = await cur.fetchall()
+                addon_ids = [ar[0] for ar in addon_rows] if addon_rows else []
+
                 orders.append(
                     OrderPublic(
                         order_id=row[0],
@@ -167,6 +187,7 @@ async def get_orders(user_id: int = Query(...)):
                         freelancer_id=row[8],
                         required_hours=row[9],
                         requirements=json.loads(row[10]) if row[10] else None,
+                        addon_service_ids=addon_ids,
                     )
                 )
             return orders
@@ -198,6 +219,10 @@ async def get_order_detail(order_id: int):
             row = await cur.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Order not found")
+            # fetch addon ids
+            await cur.execute('SELECT addon_service_id FROM order_addon WHERE order_id = %s', (order_id,))
+            addon_rows = await cur.fetchall()
+            addon_ids = [ar[0] for ar in addon_rows] if addon_rows else []
 
             return OrderDetail(
                 order_id=row[0],
@@ -218,6 +243,7 @@ async def get_order_detail(order_id: int):
                 current_phase=row[14],
                 required_hours=row[15],
                 requirements=json.loads(row[16]) if row[16] else None,
+                addon_service_ids=addon_ids,
             )
 
 

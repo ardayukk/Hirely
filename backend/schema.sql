@@ -299,6 +299,15 @@ CREATE TABLE IF NOT EXISTS "add_on" (
     CHECK (service_id1 < service_id2)
 );
 
+-- order_addon: selected add-ons per order
+CREATE TABLE IF NOT EXISTS order_addon (
+    order_id INTEGER NOT NULL,
+    addon_service_id INTEGER NOT NULL,
+    PRIMARY KEY (order_id, addon_service_id),
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
+    FOREIGN KEY (addon_service_id) REFERENCES "Service"(service_id) ON DELETE CASCADE
+);
+
 -- Update_Rating: Links Review, Freelancer
 CREATE TABLE IF NOT EXISTS "Update_Rating" (
     review_id INTEGER NOT NULL,

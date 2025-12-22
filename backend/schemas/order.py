@@ -13,6 +13,7 @@ class OrderCreate(BaseModel):
     milestone_delivery_date: Optional[datetime] = None
     requirements: Optional[Dict[str, Any]] = None
     required_hours: Optional[int] = None
+    addon_service_ids: Optional[List[int]] = None
 
 
 class OrderPublic(BaseModel):
@@ -27,6 +28,7 @@ class OrderPublic(BaseModel):
     freelancer_id: Optional[int] = None
     requirements: Optional[Dict[str, Any]] = None
     required_hours: Optional[int] = None
+    addon_service_ids: Optional[List[int]] = None
 
 
 class OrderDetail(OrderPublic):

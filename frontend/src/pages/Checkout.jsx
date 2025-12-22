@@ -15,6 +15,8 @@ export default function Checkout() {
   const [requiredHours, setRequiredHours] = useState(1);
   const [requirements, setRequirements] = useState({});
   const [selectedTier, setSelectedTier] = useState('Standard');
+  const [selectedAddons, setSelectedAddons] = useState([]);
+  const [totalPrice, setTotalPrice] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -33,6 +35,18 @@ export default function Checkout() {
     };
     if (serviceId) fetchService();
   }, [serviceId]);
+
+  useEffect(() => {
+    if (!service) return;
+    const base = service.hourly_price || 0;
+    let addonsTotal = 0;
+    if (service.addons && service.addons.length && selectedAddons.length) {
+      addonsTotal = service.addons
+        .filter(a => selectedAddons.includes(a.service_id))
+        .reduce((s, a) => s + (a.hourly_price || 0), 0);
+    }
+    setTotalPrice((base || 0) + addonsTotal);
+  }, [service, selectedAddons]);
 
   const handlePlaceOrder = async () => {
     if (!user || user.role !== 'client') {
@@ -64,14 +78,26 @@ export default function Checkout() {
         totalPrice *= normalizedMilestones;
       }
       
+      // compute hourly total including selected add-ons
+      const baseHourly = service.hourly_price || 0;
+      let addonsHourly = 0;
+      if (service.addons && service.addons.length && selectedAddons.length) {
+        addonsHourly = service.addons
+          .filter(a => selectedAddons.includes(a.service_id))
+          .reduce((s, a) => s + (a.hourly_price || 0), 0);
+      }
+      const hourlyTotal = baseHourly + addonsHourly;
+      const computedTotalPrice = hourlyTotal * Number(requiredHours) * (orderType === 'big' ? normalizedMilestones : 1);
+
       const payload = {
         service_id: parseInt(serviceId),
-        total_price: totalPrice,
+        total_price: computedTotalPrice,
         required_hours: Number(requiredHours),
         order_type: orderType,
         delivery_date: normalizedDelivery,
         milestone_count: orderType === 'big' ? normalizedMilestones : null,
         requirements: { ...requirements, selected_package_tier: selectedTier },
+        addon_service_ids: selectedAddons,
       };
 
       const res = await axiosInstance.post(`/api/orders?client_id=${user.id}`, payload);
@@ -98,7 +124,11 @@ export default function Checkout() {
   // display total: if big order, multiply required hours by milestone count
   const displayNormalizedMilestones = orderType === 'big' && Number.isFinite(Number(milestoneCount)) ? Number(milestoneCount) : 1;
   const displayHours = requiredHours === '' ? 0 : Number(requiredHours);
-  const displayTotalPrice = (service.hourly_price || 0) * displayHours * (orderType === 'big' ? displayNormalizedMilestones : 1);
+  // compute display total using base hourly + selected add-ons
+  const addonsHourlyForDisplay = service && service.addons && selectedAddons.length
+    ? service.addons.filter(a => selectedAddons.includes(a.service_id)).reduce((s, a) => s + (a.hourly_price || 0), 0)
+    : 0;
+  const displayTotalPrice = ( (service.hourly_price || 0) + addonsHourlyForDisplay ) * displayHours * (orderType === 'big' ? displayNormalizedMilestones : 1);
 
   return (
     <Container sx={{ mt: 4 }}>
@@ -221,6 +251,33 @@ export default function Checkout() {
               <Typography>Type:</Typography>
               <Typography>{orderType === 'small' ? 'Small' : 'Big (Milestones)'}</Typography>
             </Box>
+
+            {service.addons && service.addons.length > 0 && (
+              <Box sx={{ mt: 2, mb: 2 }}>
+                <Typography variant="subtitle2">Add-ons</Typography>
+                {service.addons.map((a) => (
+                  <Box key={a.service_id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                    <Box>
+                      <Typography sx={{ fontWeight: 'bold' }}>{a.title}</Typography>
+                      <Typography variant="caption" color="text.secondary">{a.category} — {a.description || ''}</Typography>
+                    </Box>
+                    <Box>
+                      <label style={{ marginRight: 8 }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedAddons.includes(a.service_id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedAddons(prev => [...prev, a.service_id]);
+                            else setSelectedAddons(prev => prev.filter(id => id !== a.service_id));
+                          }}
+                        />
+                      </label>
+                      <Typography>{a.hourly_price ? `$${a.hourly_price.toFixed(2)}` : 'Free'}</Typography>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            )}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', mt: 2, pt: 2, borderTop: '1px solid #e0e0e0' }}>
               <Typography>Total:</Typography>
               <Typography>${displayTotalPrice.toFixed(2)}</Typography>
