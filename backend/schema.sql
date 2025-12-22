@@ -99,7 +99,8 @@ CREATE TABLE IF NOT EXISTS "Review" (
 CREATE TABLE IF NOT EXISTS "Payment" (
     payment_id SERIAL PRIMARY KEY,
     amount DECIMAL(10, 2) NOT NULL,
-    payment_date TIMESTAMPTZ DEFAULT NOW()
+    payment_date TIMESTAMPTZ DEFAULT NOW(),
+    released BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS "AnalyticsReport" (

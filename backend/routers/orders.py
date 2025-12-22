@@ -336,12 +336,17 @@ async def request_revision(order_id: int, revision: RevisionCreate, client_id: i
         async with conn.cursor() as cur:
             # Verify order belongs to client
             await cur.execute(
-                'SELECT client_id, revision_count FROM make_order mo JOIN "Order" o ON mo.order_id = o.order_id WHERE mo.order_id = %s',
+                'SELECT client_id, revision_count, o.status FROM make_order mo JOIN "Order" o ON mo.order_id = o.order_id WHERE mo.order_id = %s',
                 (order_id,),
             )
             row = await cur.fetchone()
             if not row or row[0] != client_id:
                 raise HTTPException(status_code=403, detail="Order does not belong to client")
+
+            # Disallow revisions on completed/cancelled orders
+            status = row[2]
+            if status in ("completed", "cancelled"):
+                raise HTTPException(status_code=400, detail="Order is closed; revisions are not allowed")
 
             revision_no = row[1] + 1
 
@@ -380,19 +385,34 @@ async def complete_order(order_id: int, client_id: int = Query(...)):
     async with get_connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                'SELECT client_id FROM make_order WHERE order_id = %s',
+                '''
+                SELECT mo.client_id, fo.freelancer_id, p.payment_id, p.amount, p.released
+                FROM make_order mo
+                JOIN finish_order fo ON mo.order_id = fo.order_id
+                JOIN "Payment" p ON fo.payment_id = p.payment_id
+                WHERE mo.order_id = %s
+                ''',
                 (order_id,),
             )
             row = await cur.fetchone()
             if not row or row[0] != client_id:
                 raise HTTPException(status_code=403, detail="Order does not belong to client")
 
-            await cur.execute(
-                'UPDATE "Order" SET status = %s WHERE order_id = %s',
-                ("completed", order_id),
-            )
+            _, freelancer_id, payment_id, amount, released = row
+
+            # Mark order completed
+            await cur.execute('UPDATE "Order" SET status = %s WHERE order_id = %s', ("completed", order_id))
+
+            # Release payment only once
+            if not released:
+                await cur.execute('UPDATE "Payment" SET released = TRUE, payment_date = NOW() WHERE payment_id = %s', (payment_id,))
+                await cur.execute(
+                    'UPDATE "NonAdmin" SET wallet_balance = COALESCE(wallet_balance, 0) + %s WHERE user_id = %s',
+                    (amount, freelancer_id),
+                )
+
             await conn.commit()
-            return {"message": "Order completed"}
+            return {"message": "Order completed and payment released"}
 
 
 @router.post("/{order_id}/review", response_model=ReviewPublic, status_code=201)
