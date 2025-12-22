@@ -80,32 +80,6 @@ export default function OrderDetail() {
         loadAddonDetails();
     }, [order]);
 
-    useEffect(() => {
-        if (chatOpen) {
-            loadMessages();
-        }
-    }, [chatOpen]);
-
-    useEffect(() => {
-        if (location.hash === '#chat') {
-            setChatOpen(true);
-        }
-    }, [location.hash]);
-
-    useEffect(() => {
-        const loadAddonDetails = async () => {
-            if (!order?.addon_service_ids || order.addon_service_ids.length === 0) return;
-            try {
-                const promises = order.addon_service_ids.map((id) => axiosInstance.get(`/api/services/${id}`));
-                const results = await Promise.all(promises);
-                setAddonDetails(results.map((r) => r.data));
-            } catch (err) {
-                console.error('Failed to load addon details', err);
-            }
-        };
-        loadAddonDetails();
-    }, [order]);
-
     const fetchOrder = async () => {
         try {
             setLoading(true);
@@ -157,6 +131,23 @@ export default function OrderDetail() {
             alert('Order accepted and started!');
         } catch (err) {
             alert(err.response?.data?.detail || 'Failed to accept order');
+        }
+    };
+
+    const handleReject = async () => {
+        try {
+            setRejectingOrder(true);
+            await axiosInstance.patch(
+                `/api/orders/${orderId}/reject?freelancer_id=${user.id}&reason=${encodeURIComponent(rejectReason || '')}`
+            );
+            await fetchOrder();
+            setRejectDialogOpen(false);
+            setRejectReason('');
+            alert('Order rejected and client refunded');
+        } catch (err) {
+            alert(err.response?.data?.detail || 'Failed to reject order');
+        } finally {
+            setRejectingOrder(false);
         }
     };
 

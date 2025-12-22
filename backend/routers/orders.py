@@ -631,9 +631,10 @@ async def deliver_order(order_id: int, freelancer_id: int = Query(...)):
             row = await cur.fetchone()
             if not row or row[0] != freelancer_id:
                 raise HTTPException(status_code=403, detail="Order does not belong to freelancer")
-            
-            if row[1] not in ('in_progress', 'revision_requested'):
-                 raise HTTPException(status_code=400, detail="Order is not in progress")
+
+            # Allow delivery if order is accepted/in progress or pending (for older orders that skipped accept step)
+            if row[1] not in ('in_progress', 'revision_requested', 'pending'):
+                raise HTTPException(status_code=400, detail="Order is not in a deliverable state")
 
             await cur.execute('UPDATE "Order" SET status = %s WHERE order_id = %s', ("delivered", order_id))
             await conn.commit()
@@ -663,9 +664,10 @@ async def submit_delivery(
             row = await cur.fetchone()
             if not row or row[0] != freelancer_id:
                 raise HTTPException(status_code=403, detail="Order does not belong to freelancer")
-            
-            if row[1] not in ('in_progress', 'revision_requested'):
-                 raise HTTPException(status_code=400, detail="Order is not in progress")
+
+            # Allow delivery submission if order is accepted/in progress or pending (legacy orders)
+            if row[1] not in ('in_progress', 'revision_requested', 'pending'):
+                raise HTTPException(status_code=400, detail="Order is not in a deliverable state")
 
             # Insert delivery
             await cur.execute(
