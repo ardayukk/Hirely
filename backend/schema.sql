@@ -246,14 +246,32 @@ CREATE TABLE IF NOT EXISTS "Messages" (
     message_id SERIAL PRIMARY KEY,
     sender_id INTEGER NOT NULL,
     receiver_id INTEGER NOT NULL,
+    order_id INTEGER,
     reply_to_id INTEGER,
     message_text TEXT NOT NULL,
     timestamp TIMESTAMPTZ DEFAULT NOW(),
     is_read BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (sender_id) REFERENCES "User"(user_id) ON DELETE CASCADE,
     FOREIGN KEY (receiver_id) REFERENCES "User"(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
     FOREIGN KEY (reply_to_id) REFERENCES "Messages"(message_id) ON DELETE SET NULL
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'messages' AND column_name = 'order_id'
+    ) THEN
+        ALTER TABLE "Messages" ADD COLUMN order_id INTEGER;
+        BEGIN
+            ALTER TABLE "Messages" ADD CONSTRAINT messages_order_fk FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE;
+        EXCEPTION WHEN duplicate_object THEN
+            -- constraint already exists
+            NULL;
+        END;
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "File" (
     file_id SERIAL PRIMARY KEY,
@@ -275,19 +293,14 @@ CREATE TABLE IF NOT EXISTS "Dispute" (
     decision TEXT,
     resolution_date TIMESTAMPTZ,
     -- new fields for Admin Dispute Review Interface (#17)
-    order_id INTEGER,
     status TEXT DEFAULT 'OPEN',
     opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     admin_notes TEXT,
-    admin_id INTEGER,
     description TEXT,
     closed_at TIMESTAMPTZ,
     resolution_message TEXT,
     freelancer_response TEXT,
-    freelancer_response_at TIMESTAMPTZ,
-    UNIQUE(order_id),
-    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
-    FOREIGN KEY (admin_id) REFERENCES "Admin"(user_id) ON DELETE SET NULL
+    freelancer_response_at TIMESTAMPTZ
 );
 
 DO $$

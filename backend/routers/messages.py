@@ -126,11 +126,11 @@ async def send_message(payload: MessageCreate, sender_id: int = Query(...)):
 
                 await cur.execute(
                     '''
-                    INSERT INTO "Messages" (sender_id, receiver_id, reply_to_id, message_text, timestamp, is_read)
-                    VALUES (%s, %s, %s, %s, NOW(), FALSE)
+                    INSERT INTO "Messages" (sender_id, receiver_id, order_id, reply_to_id, message_text, timestamp, is_read)
+                    VALUES (%s, %s, %s, %s, %s, NOW(), FALSE)
                     RETURNING message_id, timestamp
                     ''',
-                    (sender_id, receiver_id, payload.reply_to_id, payload.message_text),
+                    (sender_id, receiver_id, payload.order_id, payload.reply_to_id, payload.message_text),
                 )
                 message_row = await cur.fetchone()
                 message_id, ts = message_row[0], message_row[1]
@@ -244,11 +244,11 @@ async def websocket_endpoint(websocket: WebSocket, order_id: int, user_id: int =
                             
                             await cur.execute(
                                 '''
-                                INSERT INTO "Messages" (sender_id, receiver_id, reply_to_id, message_text, timestamp, is_read)
-                                VALUES (%s, %s, %s, %s, NOW(), FALSE)
+                                INSERT INTO "Messages" (sender_id, receiver_id, order_id, reply_to_id, message_text, timestamp, is_read)
+                                VALUES (%s, %s, %s, %s, %s, NOW(), FALSE)
                                 RETURNING message_id, timestamp
                                 ''',
-                                (user_id, receiver_id, data.get("reply_to_id"), data.get("message_text")),
+                                (user_id, receiver_id, order_id, data.get("reply_to_id"), data.get("message_text")),
                             )
                             message_row = await cur.fetchone()
                             message_id, ts = message_row[0], message_row[1]
@@ -297,11 +297,13 @@ async def websocket_endpoint(websocket: WebSocket, order_id: int, user_id: int =
 async def upload_file(
     file: UploadFile = File(...),
     order_id: int = Form(...),
-    user_id: int = Form(...)
+    message_text: str | None = Form(None),
+    reply_to_id: int | None = Form(None),
+    sender_id: int = Query(...),
 ):
-    """Upload a file attachment for messaging. Returns file metadata to be included in message."""
+    """Upload a file attachment and create a message in the order conversation."""
     # Rate limiting for file uploads (stricter limit)
-    rate_limit_store_key = f"upload_{user_id}"
+    rate_limit_store_key = f"upload_{sender_id}"
     now = datetime.now()
     cutoff = now - timedelta(seconds=300)  # 5 minute window for uploads
     
@@ -319,7 +321,7 @@ async def upload_file(
         async with conn.cursor() as cur:
             # Verify user is part of the order
             try:
-                await verify_order_participant(cur, order_id, user_id)
+                client_id, freelancer_id = await verify_order_participant(cur, order_id, sender_id)
             except HTTPException:
                 raise
             except Exception as e:
@@ -369,71 +371,143 @@ async def upload_file(
     # Return file metadata (relative path from backend/)
     relative_path = f"uploads/order_{order_id}/{unique_filename}"
     
-    return {
-        "file_name": file.filename,
-        "file_path": relative_path,
-        "file_type": file.content_type,
-        "file_size": file_size,
-        "uploaded_at": datetime.now().isoformat()
-    }
+    # Insert a message referencing this file
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            try:
+                receiver_id = freelancer_id if sender_id == client_id else client_id
+                text = (message_text or "").strip() or "Attachment"
+
+                await cur.execute(
+                    '''
+                    INSERT INTO "Messages" (sender_id, receiver_id, order_id, reply_to_id, message_text, timestamp, is_read)
+                    VALUES (%s, %s, %s, %s, %s, NOW(), FALSE)
+                    RETURNING message_id, timestamp
+                    ''',
+                    (sender_id, receiver_id, order_id, reply_to_id, text),
+                )
+                message_row = await cur.fetchone()
+                message_id, ts = message_row[0], message_row[1]
+
+                await cur.execute(
+                    'INSERT INTO "Send_Message" (client_id, freelancer_id, message_id) VALUES (%s, %s, %s)',
+                    (client_id, freelancer_id, message_id),
+                )
+                await cur.execute(
+                    'INSERT INTO "Receive_Message" (client_id, freelancer_id, message_id) VALUES (%s, %s, %s)',
+                    (client_id, freelancer_id, message_id),
+                )
+
+                await cur.execute(
+                    'INSERT INTO "File" (message_id, file_name, file_path, upload_date, file_type) VALUES (%s, %s, %s, NOW(), %s) RETURNING file_id',
+                    (message_id, file.filename, relative_path, file.content_type),
+                )
+                file_id = (await cur.fetchone())[0]
+
+                await cur.execute(
+                    '''
+                    INSERT INTO "Notification" (user_id, type, message, date_sent, is_read)
+                    VALUES (%s, %s, %s, NOW(), FALSE)
+                    ''',
+                    (receiver_id, 'new_message', f'New message in order #{order_id}'),
+                )
+
+                await conn.commit()
+
+                await manager.broadcast_to_order(order_id, {
+                    "type": "new_message",
+                    "message": {
+                        "message_id": message_id,
+                        "sender_id": sender_id,
+                        "receiver_id": receiver_id,
+                        "message_text": text,
+                        "timestamp": ts.isoformat(),
+                        "is_read": False,
+                        "reply_to_id": reply_to_id,
+                        "file_id": file_id,
+                        "file_name": file.filename,
+                        "file_path": relative_path,
+                        "file_type": file.content_type,
+                    }
+                })
+
+                return {
+                    "message_id": message_id,
+                    "file_id": file_id,
+                    "file_name": file.filename,
+                    "file_path": relative_path,
+                    "file_type": file.content_type,
+                    "file_size": file_size,
+                    "uploaded_at": datetime.now().isoformat()
+                }
+            except Exception as e:
+                await conn.rollback()
+                raise HTTPException(status_code=400, detail=f"Failed to create message with attachment: {str(e)}")
 
 
 @router.get("", response_model=List[ConversationMessage])
 async def get_conversation(order_id: int = Query(...), user_id: int = Query(...)):
     async with get_connection() as conn:
         async with conn.cursor() as cur:
-            # Verify permissions
-            client_id, freelancer_id = await verify_order_participant(cur, order_id, user_id)
+            try:
+                # Verify permissions
+                client_id, freelancer_id = await verify_order_participant(cur, order_id, user_id)
 
-            await cur.execute(
-                '''
-                SELECT m.message_id, m.sender_id, ns.name, m.receiver_id, nr.name,
-                       m.message_text, m.timestamp, m.is_read, m.reply_to_id,
-                       f.file_id, f.file_name, f.file_path, f.file_type
-                FROM "Messages" m
-                JOIN "Send_Message" sm ON sm.message_id = m.message_id
-                JOIN "NonAdmin" ns ON ns.user_id = m.sender_id
-                JOIN "NonAdmin" nr ON nr.user_id = m.receiver_id
-                LEFT JOIN "File" f ON f.message_id = m.message_id
-                WHERE sm.client_id = %s AND sm.freelancer_id = %s
-                ORDER BY m.timestamp ASC
-                ''',
-                (client_id, freelancer_id),
-            )
-            rows = await cur.fetchall()
-
-            await cur.execute(
-                '''
-                UPDATE "Messages" SET is_read = TRUE
-                WHERE receiver_id = %s AND message_id IN (
-                    SELECT message_id FROM "Receive_Message"
-                    WHERE client_id = %s AND freelancer_id = %s
+                await cur.execute(
+                    '''
+                    SELECT m.message_id, m.sender_id, ns.name, m.receiver_id, nr.name,
+                           m.message_text, m.timestamp, m.is_read, m.reply_to_id,
+                           f.file_id, f.file_name, f.file_path, f.file_type
+                    FROM "Messages" m
+                    JOIN "Send_Message" sm ON sm.message_id = m.message_id
+                    JOIN "NonAdmin" ns ON ns.user_id = m.sender_id
+                    JOIN "NonAdmin" nr ON nr.user_id = m.receiver_id
+                    LEFT JOIN "File" f ON f.message_id = m.message_id
+                    WHERE sm.client_id = %s AND sm.freelancer_id = %s AND m.order_id = %s
+                    ORDER BY m.timestamp ASC
+                    ''',
+                    (client_id, freelancer_id, order_id),
                 )
-                ''',
-                (user_id, client_id, freelancer_id),
-            )
-            await conn.commit()
+                rows = await cur.fetchall()
 
-            messages: List[ConversationMessage] = []
-            for row in rows:
-                messages.append(
-                    ConversationMessage(
-                        message_id=row[0],
-                        sender_id=row[1],
-                        sender_name=row[2],
-                        receiver_id=row[3],
-                        receiver_name=row[4],
-                        message_text=row[5],
-                        timestamp=row[6],
-                        is_read=row[7],
-                        reply_to_id=row[8],
-                        file_id=row[9],
-                        file_name=row[10],
-                        file_path=row[11],
-                        file_type=row[12],
+                await cur.execute(
+                    '''
+                    UPDATE "Messages" SET is_read = TRUE
+                    WHERE receiver_id = %s AND message_id IN (
+                        SELECT message_id FROM "Receive_Message"
+                        WHERE client_id = %s AND freelancer_id = %s
                     )
+                    ''',
+                    (user_id, client_id, freelancer_id),
                 )
-            return messages
+                await conn.commit()
+
+                messages: List[ConversationMessage] = []
+                for row in rows:
+                    messages.append(
+                        ConversationMessage(
+                            message_id=row[0],
+                            sender_id=row[1],
+                            sender_name=row[2],
+                            receiver_id=row[3],
+                            receiver_name=row[4],
+                            message_text=row[5],
+                            timestamp=row[6],
+                            is_read=row[7],
+                            reply_to_id=row[8],
+                            file_id=row[9],
+                            file_name=row[10],
+                            file_path=row[11],
+                            file_type=row[12],
+                        )
+                    )
+                return messages
+            except HTTPException:
+                # Permission-related errors
+                raise
+            except Exception as e:
+                # Surface error details for debugging
+                raise HTTPException(status_code=500, detail=f"Failed to fetch conversation: {str(e)}")
 
 
 @router.get("/threads", response_model=List[ConversationThread])
@@ -443,21 +517,22 @@ async def get_threads(user_id: int = Query(...)):
             await cur.execute(
                 '''
                 WITH conv AS (
-                    SELECT sm.client_id, sm.freelancer_id, m.message_id, m.sender_id, m.receiver_id, m.message_text, m.timestamp, m.is_read
+                    SELECT sm.client_id, sm.freelancer_id, m.order_id, m.message_id, m.sender_id, m.receiver_id, m.message_text, m.timestamp, m.is_read
                     FROM "Messages" m
                     JOIN "Send_Message" sm ON sm.message_id = m.message_id
                     WHERE %s IN (m.sender_id, m.receiver_id)
                 ),
                 last_msg AS (
-                    SELECT DISTINCT ON (client_id, freelancer_id) client_id, freelancer_id, message_text, timestamp, sender_id, receiver_id
+                    SELECT DISTINCT ON (order_id) client_id, freelancer_id, order_id, message_text, timestamp, sender_id, receiver_id
                     FROM conv
-                    ORDER BY client_id, freelancer_id, timestamp DESC
+                    WHERE order_id IS NOT NULL
+                    ORDER BY order_id, timestamp DESC
                 ),
                 unread AS (
-                    SELECT client_id, freelancer_id, COUNT(*) AS unread_count
+                    SELECT order_id, COUNT(*) AS unread_count
                     FROM conv
-                    WHERE receiver_id = %s AND is_read = FALSE
-                    GROUP BY client_id, freelancer_id
+                    WHERE receiver_id = %s AND is_read = FALSE AND order_id IS NOT NULL
+                    GROUP BY order_id
                 )
                 SELECT lm.client_id, lm.freelancer_id,
                        CASE WHEN %s = lm.sender_id THEN lm.receiver_id ELSE lm.sender_id END AS other_user_id,
@@ -465,19 +540,10 @@ async def get_threads(user_id: int = Query(...)):
                        lm.message_text AS last_message,
                        lm.timestamp AS last_message_at,
                        COALESCE(u.unread_count, 0) AS unread_count,
-                       ord.order_id
+                       lm.order_id
                 FROM last_msg lm
-                LEFT JOIN unread u ON u.client_id = lm.client_id AND u.freelancer_id = lm.freelancer_id
+                LEFT JOIN unread u ON u.order_id = lm.order_id
                 LEFT JOIN "NonAdmin" na ON na.user_id = CASE WHEN %s = lm.sender_id THEN lm.receiver_id ELSE lm.sender_id END
-                LEFT JOIN LATERAL (
-                    SELECT o.order_id
-                    FROM make_order mo
-                    JOIN finish_order fo ON mo.order_id = fo.order_id
-                    JOIN "Order" o ON o.order_id = mo.order_id
-                    WHERE mo.client_id = lm.client_id AND fo.freelancer_id = lm.freelancer_id
-                    ORDER BY o.order_date DESC
-                    LIMIT 1
-                ) ord ON TRUE
                 ORDER BY last_message_at DESC NULLS LAST
                 ''',
                 (user_id, user_id, user_id, user_id),

@@ -77,9 +77,11 @@ export default function OrderDetail() {
       if (file) {
         const form = new FormData();
         form.append('order_id', String(orderId));
-        form.append('message_text', text || '');
+        form.append('message_text', text && text.trim() ? text : '');
         form.append('file', file);
-        await axiosInstance.post(`/api/messages/upload?sender_id=${user.id}`, form);
+        await axiosInstance.post(`/api/messages/upload?sender_id=${user.id}`, form, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
       } else {
         if (!text?.trim()) return;
         await axiosInstance.post(`/api/messages?sender_id=${user.id}`, {

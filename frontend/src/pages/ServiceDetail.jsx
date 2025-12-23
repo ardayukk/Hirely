@@ -351,24 +351,7 @@ export default function ServiceDetail() {
                       </Button>
                     )
               )}
-              {service.freelancer?.user_id !== user?.id && (
-                <Button
-                  variant="outlined"
-                  sx={{
-                    py: 1.5,
-                    px: 3,
-                    color: colors.color1,
-                    borderColor: colors.color1,
-                    fontWeight: "bold",
-                    "&:hover": {
-                      backgroundColor: colors.color4,
-                    },
-                  }}
-                  onClick={() => navigate('/inbox')}
-                >
-                  Message Seller
-                </Button>
-              )}
+              {service.freelancer?.user_id !== user?.id}
               <Button
                 variant="outlined"
                 sx={{

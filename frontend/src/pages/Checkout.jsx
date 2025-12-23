@@ -12,6 +12,7 @@ export default function Checkout() {
   const [orderType, setOrderType] = useState('small');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [milestoneCount, setMilestoneCount] = useState(3);
+  const [requirementsText, setRequirementsText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selectedAddons, setSelectedAddons] = useState(location.state?.selectedAddons || []);
@@ -58,7 +59,9 @@ export default function Checkout() {
       setError('');
 
       const normalizedDelivery = orderType === 'small' && deliveryDate ? deliveryDate : null;
-      const normalizedMilestones = orderType === 'big' && Number.isFinite(milestoneCount) ? milestoneCount : 3;
+      const normalizedMilestones = orderType === 'big'
+        ? Math.max(1, Math.min(10, parseInt(milestoneCount, 10) || 3))
+        : null;
 
       const payload = {
         service_id: parseInt(serviceId),
@@ -66,6 +69,7 @@ export default function Checkout() {
         order_type: orderType,
         delivery_date: normalizedDelivery,
         milestone_count: orderType === 'big' ? normalizedMilestones : null,
+        requirements: requirementsText ? { description: requirementsText } : null,
       };
 
       const res = await axiosInstance.post(`/api/orders?client_id=${user.id}`, payload);
@@ -152,12 +156,36 @@ export default function Checkout() {
               <TextField
                 type="number"
                 fullWidth
-                value={milestoneCount}
-                onChange={(e) => setMilestoneCount(parseInt(e.target.value))}
+                value={milestoneCount === '' ? '' : milestoneCount}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '') {
+                    setMilestoneCount('');
+                  } else {
+                    const n = parseInt(v, 10);
+                    if (Number.isNaN(n)) {
+                      setMilestoneCount('');
+                    } else {
+                      setMilestoneCount(Math.max(1, Math.min(10, n)));
+                    }
+                  }
+                }}
                 inputProps={{ min: 1, max: 10 }}
               />
             </Box>
           )}
+
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle1" gutterBottom>Order Description</Typography>
+            <TextField
+              placeholder="Describe what you want delivered"
+              fullWidth
+              multiline
+              minRows={3}
+              value={requirementsText}
+              onChange={(e) => setRequirementsText(e.target.value)}
+            />
+          </Box>
         </Grid>
 
         <Grid item xs={12} md={5}>
