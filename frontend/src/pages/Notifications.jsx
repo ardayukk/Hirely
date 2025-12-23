@@ -96,7 +96,7 @@ export default function Notifications() {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
   const sortedNotifications = [...notifications].sort((a, b) => {
     if (a.is_read !== b.is_read) return a.is_read ? 1 : -1;
-    return new Date(b.created_at) - new Date(a.created_at);
+    return new Date(b.date_sent) - new Date(a.date_sent);
   });
 
   return (
@@ -230,9 +230,9 @@ export default function Notifications() {
                         >
                           {notif.message}
                         </Typography>
-                        {notif.created_at && (
+                        {notif.date_sent && (
                           <Typography variant="caption" color="text.secondary">
-                            {new Date(notif.created_at).toLocaleString()}
+                            {new Date(notif.date_sent).toLocaleString()}
                           </Typography>
                         )}
                       </Box>

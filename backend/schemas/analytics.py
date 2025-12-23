@@ -1,6 +1,7 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, date
+from enum import Enum
 
 
 class CategoryMetric(BaseModel):
@@ -24,3 +25,74 @@ class AnalyticsSnapshot(BaseModel):
     avg_pricing: Optional[float]
     avg_dispute_rate: Optional[float]
     avg_satisfaction: Optional[float]
+
+
+class EventType(str, Enum):
+    VIEW = 'VIEW'
+    CLICK = 'CLICK'
+    ORDER_CONVERSION = 'ORDER_CONVERSION'
+    CONTACT = 'CONTACT'
+    SEARCH_IMPRESSION = 'SEARCH_IMPRESSION'
+
+class ServiceEventCreate(BaseModel):
+    service_id: int
+    event_type: EventType
+    metadata: Optional[Dict[str, Any]] = {}
+
+class ServiceEventResponse(ServiceEventCreate):
+    event_id: int
+    user_id: Optional[int]
+    created_at: datetime
+
+class DailyMetricResponse(BaseModel):
+    service_id: int
+    date: date
+    views_count: int
+
+class CategoryTrendMetric(BaseModel):
+    date: date
+    category: str
+    total_orders: int
+    total_revenue: float
+    avg_order_value: float
+    unique_buyers: int
+
+class CategoryGrowthMetric(BaseModel):
+    category: str
+    current_period_revenue: float
+    previous_period_revenue: float
+    growth_rate: float
+    total_orders: int
+
+class CategoryMetadataUpdate(BaseModel):
+    is_promoted: Optional[bool] = None
+    recruitment_needed: Optional[bool] = None
+    notes: Optional[str] = None
+
+class CategoryMetadataResponse(BaseModel):
+    category: str
+    is_promoted: bool
+    recruitment_needed: bool
+    notes: Optional[str]
+    updated_at: datetime
+
+    clicks_count: int
+    orders_count: int
+    impressions_count: Optional[int] = 0
+    conversion_rate: float
+    ctr: Optional[float] = 0.0
+    avg_response_time: Optional[float]
+    avg_rating: Optional[float]
+    total_earnings: float
+
+class FreelancerAnalyticsSummary(BaseModel):
+    total_views: int
+    total_clicks: int
+    total_orders: int
+    total_impressions: Optional[int] = 0
+    avg_conversion_rate: float
+    avg_ctr: Optional[float] = 0.0
+    avg_response_time: Optional[float]
+    avg_rating: Optional[float]
+    total_earnings: float
+

@@ -287,7 +287,7 @@ export default function MyServices() {
                         >
                           {actionInProgress === service.service_id ? "..." : "Pause"}
                         </Button>
-                      ) : (
+                      ) : service.status === "PAUSED" ? (
                         <Button
                           size="small"
                           variant="contained"
@@ -305,7 +305,7 @@ export default function MyServices() {
                         >
                           {actionInProgress === service.service_id ? "..." : "Reactivate"}
                         </Button>
-                      )}
+                      ) : null}
                     </Box>
                   </CardContent>
                 </Card>

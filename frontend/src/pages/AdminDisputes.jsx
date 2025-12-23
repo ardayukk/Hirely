@@ -473,14 +473,18 @@ export default function AdminDisputes() {
                           </CardContent>
                         </Card>
 
-                        {selectedDispute.decision && (
-                          <Card variant="outlined">
-                            <CardHeader title="Decision Note" />
-                            <CardContent>
+                        <Card variant="outlined">
+                          <CardHeader title="Decision Note" />
+                          <CardContent>
+                            {selectedDispute.status === 'resolved' && selectedDispute.decision ? (
                               <Typography variant="body2">{selectedDispute.decision}</Typography>
-                            </CardContent>
-                          </Card>
-                        )}
+                            ) : (
+                              <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                                No verdict has been reached yet. Admin review pending.
+                              </Typography>
+                            )}
+                          </CardContent>
+                        </Card>
                       </Stack>
                     </TabPanel>
 
@@ -619,9 +623,8 @@ export default function AdminDisputes() {
                           />
                           <CardContent>
                             <Typography variant="body2" color="text.secondary">
-                              {selectedDispute.client_evidence || selectedDispute.decision
-                                ? selectedDispute.client_evidence ||
-                                  'Client provided their case: ' + selectedDispute.decision
+                              {selectedDispute.description
+                                ? 'Client provided their case: ' + selectedDispute.description
                                 : 'No specific evidence provided'}
                             </Typography>
                           </CardContent>
@@ -630,13 +633,18 @@ export default function AdminDisputes() {
                         <Card variant="outlined">
                           <CardHeader
                             title="Freelancer Response"
+                            subheader={
+                              selectedDispute.freelancer_response_at
+                                ? `Submitted: ${new Date(selectedDispute.freelancer_response_at).toLocaleString()}`
+                                : null
+                            }
                             avatar={<Avatar sx={{ bgcolor: theme.palette.secondary.main }}>
                               {orderData?.freelancer?.name?.[0] || 'F'}
                             </Avatar>}
                           />
                           <CardContent>
                             <Typography variant="body2" color="text.secondary">
-                              {orderData?.freelancer_response ||
+                              {selectedDispute.freelancer_response ||
                                 'Freelancer has not yet provided their response'}
                             </Typography>
                           </CardContent>

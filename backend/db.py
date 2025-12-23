@@ -1,14 +1,46 @@
 import os
 from typing import Any
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import psycopg
 from psycopg_pool import AsyncConnectionPool
 from dotenv import load_dotenv
 
-load_dotenv()
+"""
+Environment loading strategy:
+- Prefer backend/.env
+- Fallback to project root .env (parent of backend)
+- Respect already-set OS environment variables
+"""
 
+# Prefer backend/.env
+backend_env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=backend_env_path)
+
+# If not set, fallback to project root .env
 DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    root_env_path = Path(__file__).parent.parent / '.env'
+    load_dotenv(dotenv_path=root_env_path)
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    print(f"[DEBUG] .env path (backend): {backend_env_path}")
+    print(f"[DEBUG] .env exists (backend): {backend_env_path.exists()}")
+    print(f"[DEBUG] .env path (root): {root_env_path}")
+    print(f"[DEBUG] .env exists (root): {root_env_path.exists()}")
+    # Log resolved DB connection info without exposing password
+    try:
+        # postgres://user:pass@host:port/dbname
+        if DATABASE_URL and "://" in DATABASE_URL:
+            scheme, rest = DATABASE_URL.split("://", 1)
+            creds, hostpart = rest.split("@", 1)
+            user = creds.split(":", 1)[0]
+            host, dbname = hostpart.split("/", 1)
+            print(f"[DEBUG] DB resolved -> user={user}, host={host}, db={dbname}")
+        else:
+            print(f"[DEBUG] DATABASE_URL after fallback: {DATABASE_URL}")
+    except Exception:
+        print(f"[DEBUG] DATABASE_URL after fallback: {DATABASE_URL}")
 
 # Support Django-style discrete DB_* env vars by constructing a DATABASE_URL if absent
 if not DATABASE_URL:

@@ -178,41 +178,90 @@ async def get_orders(user_id: int = Query(...)):
     """Get all orders for a user (client or freelancer)"""
     async with get_connection() as conn:
         async with conn.cursor() as cur:
-            # Try as client
-            query = '''
-                SELECT o.order_id, o.order_date, o.status, o.revision_count,
-                       NULL::INTEGER AS included_revision_limit,
-                       0 AS extra_revisions_purchased,
-                       o.total_price, o.review_given,
-                       mo.service_id, mo.client_id, fo.freelancer_id,
-                       NULL::INTEGER AS required_hours,
-                       NULL::TEXT AS requirements
-                FROM "Order" o
-                JOIN make_order mo ON o.order_id = mo.order_id
-                LEFT JOIN finish_order fo ON o.order_id = fo.order_id
-                WHERE mo.client_id = %s
-                ORDER BY o.order_date DESC
-            '''
-            await cur.execute(query, (user_id,))
-            client_rows = await cur.fetchall()
+            # Try as client, with fallback for legacy schemas missing revision columns
+            client_rows = []
+            try:
+                query = '''
+                    SELECT o.order_id, o.order_date, o.status, o.revision_count,
+                           COALESCE(o.included_revision_limit, 1) AS included_revision_limit,
+                           COALESCE(o.extra_revisions_purchased, 0) AS extra_revisions_purchased,
+                           o.total_price, o.review_given,
+                           mo.service_id, mo.client_id, fo.freelancer_id,
+                           NULL::INTEGER AS required_hours,
+                           NULL::TEXT AS requirements
+                    FROM "Order" o
+                    JOIN make_order mo ON o.order_id = mo.order_id
+                    LEFT JOIN finish_order fo ON o.order_id = fo.order_id
+                    WHERE mo.client_id = %s
+                    ORDER BY o.order_date DESC
+                '''
+                await cur.execute(query, (user_id,))
+                client_rows = await cur.fetchall()
+            except Exception:
+                # Reset transaction before running a fallback query
+                try:
+                    await conn.rollback()
+                except Exception:
+                    pass
+                # Fallback: don’t reference possibly missing columns
+                query_legacy = '''
+                    SELECT o.order_id, o.order_date, o.status, o.revision_count,
+                           NULL::INTEGER AS included_revision_limit,
+                           0 AS extra_revisions_purchased,
+                           o.total_price, o.review_given,
+                           mo.service_id, mo.client_id, fo.freelancer_id,
+                           NULL::INTEGER AS required_hours,
+                           NULL::TEXT AS requirements
+                    FROM "Order" o
+                    JOIN make_order mo ON o.order_id = mo.order_id
+                    LEFT JOIN finish_order fo ON o.order_id = fo.order_id
+                    WHERE mo.client_id = %s
+                    ORDER BY o.order_date DESC
+                '''
+                await cur.execute(query_legacy, (user_id,))
+                client_rows = await cur.fetchall()
 
-            # Try as freelancer
-            query_fl = '''
-                SELECT o.order_id, o.order_date, o.status, o.revision_count,
-                       NULL::INTEGER AS included_revision_limit,
-                       0 AS extra_revisions_purchased,
-                       o.total_price, o.review_given,
-                       mo.service_id, mo.client_id, fo.freelancer_id,
-                       NULL::INTEGER AS required_hours,
-                       NULL::TEXT AS requirements
-                FROM "Order" o
-                JOIN make_order mo ON o.order_id = mo.order_id
-                JOIN finish_order fo ON o.order_id = fo.order_id
-                WHERE fo.freelancer_id = %s
-                ORDER BY o.order_date DESC
-            '''
-            await cur.execute(query_fl, (user_id,))
-            freelancer_rows = await cur.fetchall()
+            # Try as freelancer, with the same fallback
+            freelancer_rows = []
+            try:
+                query_fl = '''
+                    SELECT o.order_id, o.order_date, o.status, o.revision_count,
+                           COALESCE(o.included_revision_limit, 1) AS included_revision_limit,
+                           COALESCE(o.extra_revisions_purchased, 0) AS extra_revisions_purchased,
+                           o.total_price, o.review_given,
+                           mo.service_id, mo.client_id, fo.freelancer_id,
+                           NULL::INTEGER AS required_hours,
+                           NULL::TEXT AS requirements
+                    FROM "Order" o
+                    JOIN make_order mo ON o.order_id = mo.order_id
+                    JOIN finish_order fo ON o.order_id = fo.order_id
+                    WHERE fo.freelancer_id = %s
+                    ORDER BY o.order_date DESC
+                '''
+                await cur.execute(query_fl, (user_id,))
+                freelancer_rows = await cur.fetchall()
+            except Exception:
+                # Reset transaction before running a fallback query
+                try:
+                    await conn.rollback()
+                except Exception:
+                    pass
+                query_fl_legacy = '''
+                    SELECT o.order_id, o.order_date, o.status, o.revision_count,
+                           NULL::INTEGER AS included_revision_limit,
+                           0 AS extra_revisions_purchased,
+                           o.total_price, o.review_given,
+                           mo.service_id, mo.client_id, fo.freelancer_id,
+                           NULL::INTEGER AS required_hours,
+                           NULL::TEXT AS requirements
+                    FROM "Order" o
+                    JOIN make_order mo ON o.order_id = mo.order_id
+                    JOIN finish_order fo ON o.order_id = fo.order_id
+                    WHERE fo.freelancer_id = %s
+                    ORDER BY o.order_date DESC
+                '''
+                await cur.execute(query_fl_legacy, (user_id,))
+                freelancer_rows = await cur.fetchall()
 
             # Merge results
             all_rows = client_rows + freelancer_rows
@@ -258,29 +307,61 @@ async def get_order_detail(order_id: int):
     """Get full order details"""
     async with get_connection() as conn:
         async with conn.cursor() as cur:
-            query = '''
-                SELECT o.order_id, o.order_date, o.status, o.revision_count,
-                       NULL::INTEGER AS included_revision_limit,
-                       0 AS extra_revisions_purchased,
-                       o.total_price, o.review_given,
-                       mo.service_id, mo.client_id, fo.freelancer_id,
-                       s.title, s.category,
-                       na_fl.name AS freelancer_name,
-                       na_cl.name AS client_name,
-                       bo.milestone_count, bo.current_phase,
-                       NULL::INTEGER AS required_hours,
-                       NULL::TEXT AS requirements
-                FROM "Order" o
-                JOIN make_order mo ON o.order_id = mo.order_id
-                LEFT JOIN finish_order fo ON o.order_id = fo.order_id
-                LEFT JOIN "Service" s ON mo.service_id = s.service_id
-                LEFT JOIN "NonAdmin" na_fl ON fo.freelancer_id = na_fl.user_id
-                LEFT JOIN "NonAdmin" na_cl ON mo.client_id = na_cl.user_id
-                LEFT JOIN "BigOrder" bo ON o.order_id = bo.order_id
-                WHERE o.order_id = %s
-            '''
-            await cur.execute(query, (order_id,))
-            row = await cur.fetchone()
+            row = None
+            try:
+                query = '''
+                    SELECT o.order_id, o.order_date, o.status, o.revision_count,
+                           COALESCE(o.included_revision_limit, 1) AS included_revision_limit,
+                           COALESCE(o.extra_revisions_purchased, 0) AS extra_revisions_purchased,
+                           o.total_price, o.review_given,
+                           mo.service_id, mo.client_id, fo.freelancer_id,
+                           s.title, s.category,
+                           na_fl.name AS freelancer_name,
+                           na_cl.name AS client_name,
+                           bo.milestone_count, bo.current_phase,
+                           NULL::INTEGER AS required_hours,
+                           NULL::TEXT AS requirements
+                    FROM "Order" o
+                    JOIN make_order mo ON o.order_id = mo.order_id
+                    LEFT JOIN finish_order fo ON o.order_id = fo.order_id
+                    LEFT JOIN "Service" s ON mo.service_id = s.service_id
+                    LEFT JOIN "NonAdmin" na_fl ON fo.freelancer_id = na_fl.user_id
+                    LEFT JOIN "NonAdmin" na_cl ON mo.client_id = na_cl.user_id
+                    LEFT JOIN "BigOrder" bo ON o.order_id = bo.order_id
+                    WHERE o.order_id = %s
+                '''
+                await cur.execute(query, (order_id,))
+                row = await cur.fetchone()
+            except Exception:
+                # Reset transaction before running a fallback query
+                try:
+                    await conn.rollback()
+                except Exception:
+                    pass
+                # Fallback for legacy schemas without revision columns
+                query_legacy = '''
+                    SELECT o.order_id, o.order_date, o.status, o.revision_count,
+                           NULL::INTEGER AS included_revision_limit,
+                           0 AS extra_revisions_purchased,
+                           o.total_price, o.review_given,
+                           mo.service_id, mo.client_id, fo.freelancer_id,
+                           s.title, s.category,
+                           na_fl.name AS freelancer_name,
+                           na_cl.name AS client_name,
+                           bo.milestone_count, bo.current_phase,
+                           NULL::INTEGER AS required_hours,
+                           NULL::TEXT AS requirements
+                    FROM "Order" o
+                    JOIN make_order mo ON o.order_id = mo.order_id
+                    LEFT JOIN finish_order fo ON o.order_id = fo.order_id
+                    LEFT JOIN "Service" s ON mo.service_id = s.service_id
+                    LEFT JOIN "NonAdmin" na_fl ON fo.freelancer_id = na_fl.user_id
+                    LEFT JOIN "NonAdmin" na_cl ON mo.client_id = na_cl.user_id
+                    LEFT JOIN "BigOrder" bo ON o.order_id = bo.order_id
+                    WHERE o.order_id = %s
+                '''
+                await cur.execute(query_legacy, (order_id,))
+                row = await cur.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Order not found")
             # fetch addon ids (safe if table doesn't exist)

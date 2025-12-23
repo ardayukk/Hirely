@@ -102,8 +102,38 @@ CREATE TABLE IF NOT EXISTS "Payment" (
     payment_id SERIAL PRIMARY KEY,
     amount DECIMAL(10, 2) NOT NULL,
     payment_date TIMESTAMPTZ DEFAULT NOW(),
-    released BOOLEAN DEFAULT FALSE
+    released BOOLEAN DEFAULT FALSE,
+    status TEXT DEFAULT 'HELD',
+    released_amount DECIMAL(10, 2) DEFAULT 0,
+    refunded_amount DECIMAL(10, 2) DEFAULT 0,
+    released_at TIMESTAMPTZ,
+    refunded_at TIMESTAMPTZ,
+    CONSTRAINT payment_amount_flow CHECK ((COALESCE(released_amount,0) + COALESCE(refunded_amount,0)) <= amount)
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'payment' AND column_name = 'status') THEN
+        ALTER TABLE "Payment" ADD COLUMN status TEXT DEFAULT 'HELD';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'payment' AND column_name = 'released_amount') THEN
+        ALTER TABLE "Payment" ADD COLUMN released_amount DECIMAL(10, 2) DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'payment' AND column_name = 'refunded_amount') THEN
+        ALTER TABLE "Payment" ADD COLUMN refunded_amount DECIMAL(10, 2) DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'payment' AND column_name = 'released_at') THEN
+        ALTER TABLE "Payment" ADD COLUMN released_at TIMESTAMPTZ;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'payment' AND column_name = 'refunded_at') THEN
+        ALTER TABLE "Payment" ADD COLUMN refunded_at TIMESTAMPTZ;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints WHERE table_name = 'payment' AND constraint_name = 'payment_amount_flow'
+    ) THEN
+        ALTER TABLE "Payment" ADD CONSTRAINT payment_amount_flow CHECK ((COALESCE(released_amount,0) + COALESCE(refunded_amount,0)) <= amount);
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "AnalyticsReport" (
     report_id SERIAL PRIMARY KEY,
@@ -117,6 +147,9 @@ CREATE TABLE IF NOT EXISTS "Order" (
     order_id SERIAL PRIMARY KEY,
     order_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     status TEXT DEFAULT 'pending',
+    payment_status TEXT DEFAULT 'HELD',
+    amount_released DECIMAL(10, 2) DEFAULT 0,
+    amount_refunded DECIMAL(10, 2) DEFAULT 0,
     revision_count INTEGER DEFAULT 0,
     included_revision_limit INTEGER DEFAULT 1,
     extra_revisions_purchased INTEGER NOT NULL DEFAULT 0 CHECK (extra_revisions_purchased >= 0),
@@ -127,6 +160,19 @@ CREATE TABLE IF NOT EXISTS "Order" (
     requirements TEXT,
     FOREIGN KEY (report_id) REFERENCES "AnalyticsReport"(report_id) ON DELETE SET NULL
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'order' AND column_name = 'payment_status') THEN
+        ALTER TABLE "Order" ADD COLUMN payment_status TEXT DEFAULT 'HELD';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'order' AND column_name = 'amount_released') THEN
+        ALTER TABLE "Order" ADD COLUMN amount_released DECIMAL(10, 2) DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'order' AND column_name = 'amount_refunded') THEN
+        ALTER TABLE "Order" ADD COLUMN amount_refunded DECIMAL(10, 2) DEFAULT 0;
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "BigOrder" (
     order_id INTEGER PRIMARY KEY,
@@ -150,6 +196,26 @@ CREATE TABLE IF NOT EXISTS "Deliverable" (
     payment_amount DECIMAL(10, 2),
     status TEXT DEFAULT 'pending',
     FOREIGN KEY (order_id) REFERENCES "BigOrder"(order_id) ON DELETE CASCADE
+);
+
+-- Delivery submissions (freelancer -> client)
+CREATE TABLE IF NOT EXISTS "Delivery" (
+    delivery_id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    freelancer_id INTEGER NOT NULL,
+    message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "DeliveryFile" (
+    file_id SERIAL PRIMARY KEY,
+    delivery_id INTEGER NOT NULL,
+    file_path TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    upload_date TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (delivery_id) REFERENCES "Delivery"(delivery_id) ON DELETE CASCADE
 );
 
 -- ============================================
@@ -205,10 +271,63 @@ CREATE TABLE IF NOT EXISTS "File" (
 
 CREATE TABLE IF NOT EXISTS "Dispute" (
     dispute_id SERIAL PRIMARY KEY,
+    -- legacy columns
     decision TEXT,
     resolution_date TIMESTAMPTZ,
-    status TEXT DEFAULT 'open'
+    -- new fields for Admin Dispute Review Interface (#17)
+    order_id INTEGER,
+    status TEXT DEFAULT 'OPEN',
+    opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    admin_notes TEXT,
+    admin_id INTEGER,
+    description TEXT,
+    closed_at TIMESTAMPTZ,
+    resolution_message TEXT,
+    freelancer_response TEXT,
+    freelancer_response_at TIMESTAMPTZ,
+    UNIQUE(order_id),
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
+    FOREIGN KEY (admin_id) REFERENCES "Admin"(user_id) ON DELETE SET NULL
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'dispute' AND column_name = 'closed_at') THEN
+        ALTER TABLE "Dispute" ADD COLUMN closed_at TIMESTAMPTZ;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'dispute' AND column_name = 'resolution_message') THEN
+        ALTER TABLE "Dispute" ADD COLUMN resolution_message TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'dispute' AND column_name = 'freelancer_response') THEN
+        ALTER TABLE "Dispute" ADD COLUMN freelancer_response TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'dispute' AND column_name = 'freelancer_response_at') THEN
+        ALTER TABLE "Dispute" ADD COLUMN freelancer_response_at TIMESTAMPTZ;
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS "DisputeResolution" (
+    resolution_id SERIAL PRIMARY KEY,
+    dispute_id INTEGER NOT NULL,
+    admin_id INTEGER,
+    resolution_type TEXT NOT NULL,
+    client_amount DECIMAL(10, 2) DEFAULT 0,
+    freelancer_amount DECIMAL(10, 2) DEFAULT 0,
+    message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (dispute_id) REFERENCES "Dispute"(dispute_id) ON DELETE CASCADE,
+    FOREIGN KEY (admin_id) REFERENCES "Admin"(user_id) ON DELETE SET NULL,
+    CONSTRAINT dispute_resolution_amount_flow CHECK (COALESCE(client_amount,0) + COALESCE(freelancer_amount,0) >= 0)
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints WHERE table_name = 'disputeresolution' AND constraint_name = 'dispute_resolution_amount_flow'
+    ) THEN
+        ALTER TABLE "DisputeResolution" ADD CONSTRAINT dispute_resolution_amount_flow CHECK (COALESCE(client_amount,0) + COALESCE(freelancer_amount,0) >= 0);
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "Report" (
     report_id SERIAL PRIMARY KEY,
@@ -373,6 +492,117 @@ CREATE INDEX IF NOT EXISTS idx_order_date ON "Order"(order_date);
 CREATE INDEX IF NOT EXISTS idx_messages_sender ON "Messages"(sender_id);
 CREATE INDEX IF NOT EXISTS idx_messages_receiver ON "Messages"(receiver_id);
 CREATE INDEX IF NOT EXISTS idx_review_client ON "Review"(client_id);
+
+-- ============================================
+-- ADMIN DISPUTE REVIEW - SCHEMA EXTENSIONS
+-- ============================================
+
+-- Add optional order link to Messages so order chats can be queried in admin view
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Messages' AND column_name = 'order_id'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Messages" ADD COLUMN order_id INTEGER NULL';
+        EXECUTE 'ALTER TABLE "Messages" ADD CONSTRAINT messages_order_fk FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE SET NULL';
+    END IF;
+END $$;
+
+-- Add created_at to Revision for timeline ordering
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Revision' AND column_name = 'created_at'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Revision" ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()';
+    END IF;
+END $$;
+
+-- Ensure Dispute fields and constraints exist (idempotent updates for existing DBs)
+DO $$
+BEGIN
+    -- order_id linkage
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Dispute' AND column_name = 'order_id'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Dispute" ADD COLUMN order_id INTEGER';
+        EXECUTE 'ALTER TABLE "Dispute" ADD CONSTRAINT dispute_order_fk FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE';
+    END IF;
+
+    -- opened_at
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Dispute' AND column_name = 'opened_at'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Dispute" ADD COLUMN opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW()';
+    END IF;
+
+    -- admin_notes
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Dispute' AND column_name = 'admin_notes'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Dispute" ADD COLUMN admin_notes TEXT';
+    END IF;
+
+    -- admin_id
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Dispute' AND column_name = 'admin_id'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Dispute" ADD COLUMN admin_id INTEGER';
+        EXECUTE 'ALTER TABLE "Dispute" ADD CONSTRAINT dispute_admin_fk FOREIGN KEY (admin_id) REFERENCES "Admin"(user_id) ON DELETE SET NULL';
+    END IF;
+
+    -- description
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Dispute' AND column_name = 'description'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Dispute" ADD COLUMN description TEXT';
+    END IF;
+
+    -- status to uppercase policy and check
+    -- Normalize any legacy statuses to uppercase variants
+    BEGIN
+        EXECUTE 'UPDATE "Dispute" SET status = UPPER(status) WHERE status IS NOT NULL';
+    EXCEPTION WHEN others THEN NULL; END;
+
+    -- Add CHECK constraint if missing
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'dispute_status_check'
+    ) THEN
+        BEGIN
+            EXECUTE 'ALTER TABLE "Dispute" ADD CONSTRAINT dispute_status_check CHECK (status IN (''OPEN'',''RESOLVED'',''INFO_REQUESTED''))';
+        EXCEPTION WHEN others THEN NULL; END;
+    END IF;
+
+    -- Unique per order (only one active dispute per order)
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'dispute_order_unique'
+    ) THEN
+        BEGIN
+            EXECUTE 'ALTER TABLE "Dispute" ADD CONSTRAINT dispute_order_unique UNIQUE(order_id)';
+        EXCEPTION WHEN others THEN NULL; END;
+    END IF;
+END $$;
+
+-- DisputeEvidence table for file submissions by both parties
+CREATE TABLE IF NOT EXISTS "DisputeEvidence" (
+    evidence_id SERIAL PRIMARY KEY,
+    dispute_id INTEGER NOT NULL,
+    submitted_by_user_id INTEGER NOT NULL,
+    description TEXT,
+    file_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (dispute_id) REFERENCES "Dispute"(dispute_id) ON DELETE CASCADE,
+    FOREIGN KEY (submitted_by_user_id) REFERENCES "User"(user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_disputeevidence_dispute ON "DisputeEvidence"(dispute_id);
 
 -- Allow reported.admin_id to be nullable (admin can be assigned later)
 DO $$
@@ -551,6 +781,20 @@ BEGIN
     EXCEPTION WHEN others THEN
         NULL;
     END;
+
+    -- Ensure Payment.released exists
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Payment' AND column_name = 'released'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Payment" ADD COLUMN released BOOLEAN DEFAULT FALSE';
+        EXECUTE 'UPDATE "Payment" SET released = FALSE WHERE released IS NULL';
+        BEGIN
+            EXECUTE 'ALTER TABLE "Payment" ALTER COLUMN released SET DEFAULT FALSE';
+        EXCEPTION WHEN others THEN
+            NULL;
+        END;
+    END IF;
 END $$;
 
 DROP TABLE IF EXISTS "reported" CASCADE;
@@ -581,3 +825,74 @@ CREATE TABLE "cancel" (
     FOREIGN KEY (admin_id) REFERENCES "Admin"(user_id) ON DELETE CASCADE
 );
 
+DROP TABLE IF EXISTS "reject" CASCADE;
+
+CREATE TABLE "reject" (
+    rejection_id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL UNIQUE,
+    freelancer_id INTEGER NOT NULL,
+    client_id INTEGER NOT NULL,
+    reason TEXT,
+    rejection_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (client_id) REFERENCES "Client"(user_id) ON DELETE CASCADE
+);
+
+-- ============================================
+-- WITHDRAWAL MANAGEMENT SYSTEM
+-- ============================================
+
+DROP TABLE IF EXISTS "WithdrawalMethod" CASCADE;
+
+CREATE TABLE "WithdrawalMethod" (
+    method_id SERIAL PRIMARY KEY,
+    freelancer_id INTEGER NOT NULL,
+    method_type TEXT NOT NULL CHECK (method_type IN ('bank_account', 'paypal', 'stripe')),
+    account_holder_name TEXT NOT NULL,
+    account_number TEXT,
+    bank_name TEXT,
+    swift_code TEXT,
+    paypal_email TEXT,
+    is_default BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE
+);
+
+DROP TABLE IF EXISTS "Withdrawal" CASCADE;
+
+CREATE TABLE "Withdrawal" (
+    withdrawal_id SERIAL PRIMARY KEY,
+    freelancer_id INTEGER NOT NULL,
+    withdrawal_method_id INTEGER NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL CHECK (amount > 0),
+    fee DECIMAL(10, 2) DEFAULT 0.00,
+    net_amount DECIMAL(10, 2) NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'cancelled')),
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    processing_started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    notes TEXT,
+    transaction_reference TEXT,
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (withdrawal_method_id) REFERENCES "WithdrawalMethod"(method_id) ON DELETE RESTRICT
+);
+
+-- NPS Survey: Net Promoter Score and satisfaction surveys
+CREATE TABLE IF NOT EXISTS "NPSSurvey" (
+    survey_id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    client_id INTEGER NOT NULL,
+    freelancer_id INTEGER NOT NULL,
+    nps_score INTEGER CHECK (nps_score >= 0 AND nps_score <= 10),
+    satisfaction_rating INTEGER CHECK (satisfaction_rating >= 1 AND satisfaction_rating <= 5),
+    response_time_rating INTEGER CHECK (response_time_rating >= 1 AND response_time_rating <= 5),
+    quality_rating INTEGER CHECK (quality_rating >= 1 AND quality_rating <= 5),
+    communication_rating INTEGER CHECK (communication_rating >= 1 AND communication_rating <= 5),
+    would_repeat BOOLEAN DEFAULT NULL,
+    comments TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
+    FOREIGN KEY (client_id) REFERENCES "Client"(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE
+);

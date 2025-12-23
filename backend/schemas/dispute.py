@@ -27,7 +27,14 @@ class DisputePublic(BaseModel):
     admin_id: Optional[int]
     client_name: Optional[str] = None
     admin_name: Optional[str] = None
+    description: Optional[str] = None
+    freelancer_response: Optional[str] = None
+    freelancer_response_at: Optional[datetime] = None
 
 
 class DisputeList(BaseModel):
     items: List[DisputePublic]
+
+
+class FreelancerResponseCreate(BaseModel):
+    response: str

@@ -34,6 +34,10 @@ class OrderPublic(BaseModel):
     requirements: Optional[Dict[str, Any]] = None
     required_hours: Optional[int] = None
     addon_service_ids: Optional[List[int]] = None
+    service_title: Optional[str] = None
+    client_name: Optional[str] = None
+    freelancer_name: Optional[str] = None
+    delivery_date: Optional[datetime] = None
 
 
 class OrderDetail(OrderPublic):
@@ -78,4 +82,19 @@ class ReviewPublic(BaseModel):
     comment: Optional[str]
     highlights: Optional[str]
     client_id: int
+    service_id: int
+
+
+class OrderRejectionRequest(BaseModel):
+    """Freelancer rejects an order"""
+    reason: Optional[str] = None
+
+
+class OrderRejectionPublic(BaseModel):
+    rejection_id: int
+    order_id: int
+    freelancer_id: int
+    client_id: int
+    reason: Optional[str]
+    rejection_date: datetime
     service_id: int

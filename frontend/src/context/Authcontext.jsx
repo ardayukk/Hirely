@@ -10,6 +10,27 @@ const axiosInstance = axios.create({
     withCredentials: false,
 });
 
+// Add a request interceptor to inject the Authorization header
+axiosInstance.interceptors.request.use(
+    (config) => {
+        const storedUser = localStorage.getItem('hirely_user');
+        if (storedUser) {
+            try {
+                const user = JSON.parse(storedUser);
+                if (user && user.id) {
+                    config.headers.Authorization = `Bearer ${user.id}`;
+                }
+            } catch (e) {
+                console.error("Failed to parse user from local storage", e);
+            }
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
 export { axiosInstance };
 
 // Helper to read cookie by name

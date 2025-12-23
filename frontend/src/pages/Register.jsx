@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, TextField, Button, Typography, Alert, Paper } from '@mui/material';
+import { Box, TextField, Button, Typography, Alert, Paper, RadioGroup, FormControlLabel, Radio, FormControl, FormLabel } from '@mui/material';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/Authcontext.jsx';
 import colors from '../helper/colors';
@@ -10,6 +10,7 @@ export default function Register() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('client');
   const [err, setErr] = useState('');
   const [bubbles, setBubbles] = useState([]);
   const bubbleRefs = useRef([]);
@@ -84,7 +85,7 @@ export default function Register() {
     e.preventDefault();
     setErr('');
     try {
-      await register({ username, email, password });
+      await register({ username, email, password, role });
       nav('/login');
     } catch (e) {
       setErr(e.message || 'Registration failed');
@@ -230,6 +231,38 @@ export default function Register() {
               },
             }}
           />
+
+          <FormControl sx={{ mt: 2 }}>
+            <FormLabel sx={{ color: colors.color3, fontWeight: 500, mb: 1 }}>
+              Register as:
+            </FormLabel>
+            <RadioGroup
+              row
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              sx={{
+                '& .MuiRadio-root': {
+                  color: colors.color3,
+                },
+                '& .Mui-checked': {
+                  color: colors.color2,
+                },
+              }}
+            >
+              <FormControlLabel
+                value="client"
+                control={<Radio />}
+                label="Client"
+                sx={{ color: colors.color3 }}
+              />
+              <FormControlLabel
+                value="freelancer"
+                control={<Radio />}
+                label="Freelancer"
+                sx={{ color: colors.color3 }}
+              />
+            </RadioGroup>
+          </FormControl>
 
           <Button
             variant="contained"

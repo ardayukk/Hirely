@@ -23,6 +23,9 @@ export default function OrderDetail() {
   const [deliveryNote, setDeliveryNote] = useState('');
   const [deliverySending, setDeliverySending] = useState(false);
   const [deliveryError, setDeliveryError] = useState('');
+  const [disputeResponse, setDisputeResponse] = useState('');
+  const [disputeResponseLoading, setDisputeResponseLoading] = useState(false);
+  const [disputeResponseError, setDisputeResponseError] = useState('');
 
   useEffect(() => {
     fetchOrder();
@@ -209,6 +212,36 @@ export default function OrderDetail() {
     }
   };
 
+  const handleSubmitDisputeResponse = async () => {
+    if (!disputeResponse?.trim()) {
+      setDisputeResponseError('Please provide your response');
+      return;
+    }
+    try {
+      setDisputeResponseLoading(true);
+      setDisputeResponseError('');
+      // Find dispute_id for this order
+      const disputesRes = await axiosInstance.get('/api/disputes');
+      const dispute = disputesRes.data?.find(d => d.order_id === Number(orderId));
+      if (!dispute) {
+        throw new Error('Dispute not found');
+      }
+      await axiosInstance.post(
+        `/api/disputes/${dispute.dispute_id}/freelancer-response?freelancer_id=${user.id}`,
+        { response: disputeResponse }
+      );
+      setDisputeResponse('');
+      alert('Response submitted successfully');
+      await fetchOrder();
+    } catch (err) {
+      console.error('Failed to submit response', err);
+      console.error('Error details:', err.response?.data);
+      setDisputeResponseError(err.response?.data?.detail || err.message || 'Failed to submit response');
+    } finally {
+      setDisputeResponseLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <Container sx={{ mt: 4 }}>
@@ -377,6 +410,39 @@ export default function OrderDetail() {
               <Button fullWidth variant="outlined" color="warning" sx={{ mb: 1 }} onClick={handleOpenDispute} disabled={disputeLoading}>
                 {disputeLoading ? 'Opening Dispute...' : 'Open Dispute'}
               </Button>
+            )}
+
+            {isFreelancer && order.status === 'disputed' && (
+              <Paper sx={{ p: 2, mb: 1, border: '2px solid', borderColor: 'warning.main' }}>
+                <Typography variant="subtitle2" gutterBottom color="warning.main">
+                  ⚠️ Respond to Dispute
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 1 }} color="text.secondary">
+                  This order is disputed. Provide your side of the story:
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  placeholder="Explain your position on this dispute..."
+                  value={disputeResponse}
+                  onChange={(e) => setDisputeResponse(e.target.value)}
+                  disabled={disputeResponseLoading}
+                  sx={{ mb: 1 }}
+                />
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="warning"
+                  onClick={handleSubmitDisputeResponse}
+                  disabled={disputeResponseLoading || !disputeResponse?.trim()}
+                >
+                  {disputeResponseLoading ? 'Submitting...' : 'Submit Response'}
+                </Button>
+                {disputeResponseError && (
+                  <Alert severity="error" sx={{ mt: 1 }}>{disputeResponseError}</Alert>
+                )}
+              </Paper>
             )}
 
             <Button fullWidth variant="outlined" sx={{ mb: 1 }} onClick={() => setChatOpen((prev) => !prev)}>
