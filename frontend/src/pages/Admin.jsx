@@ -5,6 +5,7 @@ import { useAuth } from '../context/Authcontext';
 import AdminDisputes from './AdminDisputes';
 import TopFreelancersAnalytics from './TopFreelancersAnalytics';
 import SatisfactionDashboard from './SatisfactionDashboard';
+import PricingAnalytics from './PricingAnalytics';
 
 export default function Admin() {
     const { user } = useAuth();
@@ -34,6 +35,7 @@ export default function Admin() {
                 <Tab label="Top Freelancers" />
                 <Tab label="Satisfaction Metrics" />
                 <Tab label="Category Trends" />
+                <Tab label="Pricing Trends" />
             </Tabs>
 
             <Box sx={{ mt: 2 }}>
@@ -41,6 +43,7 @@ export default function Admin() {
                 {activeTab === 1 && <TopFreelancersAnalytics />}
                 {activeTab === 2 && <SatisfactionDashboard />}
                 {activeTab === 3 && <CategoryTrends />}
+                {activeTab === 4 && <PricingAnalytics />}
             </Box>
         </Container>
     );

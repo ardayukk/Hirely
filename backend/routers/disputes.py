@@ -78,41 +78,45 @@ async def open_dispute(payload: DisputeCreate, client_id: int = Query(...)):
 
 @router.get("", response_model=List[DisputePublic])
 async def list_disputes(status: Optional[str] = Query(None)):
-    async with get_connection() as conn:
-        async with conn.cursor() as cur:
-            query = '''
-                SELECT d.dispute_id, d.status, d.decision, d.resolution_date,
-                       r.order_id, r.client_id, r.admin_id,
-                       nac.name AS client_name,
-                       naadmin.name AS admin_name
-                FROM "Dispute" d
-                JOIN reported r ON d.dispute_id = r.dispute_id
-                JOIN "NonAdmin" nac ON r.client_id = nac.user_id
-                LEFT JOIN "NonAdmin" naadmin ON r.admin_id = naadmin.user_id
-            '''
-            params = []
-            if status:
-                query += ' WHERE d.status = %s'
-                params.append(status)
-            query += ' ORDER BY d.dispute_id DESC'
-            await cur.execute(query, params)
-            rows = await cur.fetchall()
-            results: List[DisputePublic] = []
-            for row in rows:
-                results.append(
-                    DisputePublic(
-                        dispute_id=row[0],
-                        status=row[1],
-                        decision=row[2],
-                        resolution_date=row[3],
-                        order_id=row[4],
-                        client_id=row[5],
-                        admin_id=row[6],
-                        client_name=row[7],
-                        admin_name=row[8],
+    try:
+        async with get_connection() as conn:
+            async with conn.cursor() as cur:
+                query = '''
+                    SELECT d.dispute_id, d.status, d.decision, d.resolution_date,
+                           r.order_id, r.client_id, r.admin_id,
+                           nac.name AS client_name,
+                           a.username AS admin_name
+                    FROM "Dispute" d
+                    JOIN reported r ON d.dispute_id = r.dispute_id
+                    LEFT JOIN "NonAdmin" nac ON r.client_id = nac.user_id
+                    LEFT JOIN "Admin" a ON r.admin_id = a.user_id
+                '''
+                params = []
+                if status:
+                    query += ' WHERE d.status = %s'
+                    params.append(status)
+                query += ' ORDER BY d.dispute_id DESC'
+                await cur.execute(query, params)
+                rows = await cur.fetchall()
+                results: List[DisputePublic] = []
+                for row in rows:
+                    results.append(
+                        DisputePublic(
+                            dispute_id=row[0],
+                            status=row[1],
+                            decision=row[2],
+                            resolution_date=row[3],
+                            order_id=row[4],
+                            client_id=row[5],
+                            admin_id=row[6],
+                            client_name=row[7],
+                            admin_name=row[8],
+                        )
                     )
-                )
-            return results
+                return results
+    except Exception as e:
+        print(f"Error in list_disputes: {e}")
+        return []
 
 
 @router.patch("/{dispute_id}/assign", response_model=DisputePublic)

@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 async function request(input, init) {
   const res = await fetch(input, init)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -25,3 +27,13 @@ export const api = {
     method: 'DELETE'
   })
 }
+
+// Axios instance for API calls
+const axiosInstance = axios.create({
+  baseURL: 'http://localhost:8000',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+export default axiosInstance;

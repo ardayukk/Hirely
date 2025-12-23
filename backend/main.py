@@ -1,3 +1,10 @@
+import sys
+import asyncio
+
+# Fix for Windows: psycopg requires WindowsSelectorEventLoopPolicy
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,6 +22,7 @@ from backend.routers import (
     withdrawals,
     earnings,
     satisfaction,
+    pricing_analytics,
 )
 
 # Hirely API
@@ -43,6 +51,7 @@ app.include_router(analytics.router, prefix="/api")
 app.include_router(withdrawals.router)
 app.include_router(earnings.router, prefix="/api")
 app.include_router(satisfaction.router)
+app.include_router(pricing_analytics.router, prefix="/api")
 
 @app.get("/")
 def root():

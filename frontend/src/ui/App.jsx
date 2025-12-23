@@ -25,6 +25,7 @@ import Seller from '../pages/Seller';
 import ServiceDetail from '../pages/ServiceDetail';
 import Services from '../pages/Services';
 import Withdrawals from '../pages/Withdrawals';
+import PricingAnalytics from '../pages/PricingAnalytics';
 import { ThemeModeContext } from './main';
 
 function AppContent() {
@@ -95,6 +96,7 @@ function AppContent() {
                     <Route path="/myServices" element={requireAuth(<MyServices />)} />
                     <Route path="/analytics" element={requireAuth(<Analytics />)} />
                     <Route path="/withdrawals" element={requireAuth(<Withdrawals />)} />
+                    <Route path="/admin/pricing-analytics" element={requireAuth(<PricingAnalytics />)} />
                     <Route path="/logout" element={<Logout />} />
 
                     <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />
