@@ -40,7 +40,9 @@ async def close_pool():
 
 @asynccontextmanager
 async def get_connection() -> Any:
-    if not _pool:
-        raise RuntimeError("Connection pool not initialized")
+    global _pool
+    # Lazy-init the pool if not already initialized (handles missing startup hooks)
+    if _pool is None:
+        await init_pool()
     async with _pool.connection() as conn:
         yield conn

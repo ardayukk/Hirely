@@ -17,10 +17,27 @@ from backend.routers import (
 # Hirely API
 app = FastAPI(title="Hirely API", version="0.1.0")
 
+# Initialize database connection pool on startup/shutdown
+from backend.db import init_pool, close_pool
+
+@app.on_event("startup")
+async def _on_startup():
+    await init_pool()
+
+@app.on_event("shutdown")
+async def _on_shutdown():
+    await close_pool()
+
 # CORS for local dev (allow all localhost ports for development)
+# CORS for local dev (allow common localhost origins)
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

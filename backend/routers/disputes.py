@@ -250,3 +250,45 @@ async def resolve_dispute(dispute_id: int, payload: DisputeResolve, admin_id: in
             except Exception as e:
                 await conn.rollback()
                 raise HTTPException(status_code=400, detail=f"Failed to resolve dispute: {str(e)}")
+
+
+@router.get("/{dispute_id}", response_model=DisputePublic)
+async def get_dispute_detail(dispute_id: int):
+    """Get full dispute details including evidence and communication history"""
+    return await _get_dispute(dispute_id)
+
+
+@router.post("/{dispute_id}/notes")
+async def add_dispute_note(dispute_id: int, admin_id: int = Query(...), note: str = Query(...)):
+    """Add internal admin notes to a dispute"""
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            try:
+                # Verify dispute exists and admin is assigned
+                await cur.execute(
+                    'SELECT admin_id FROM reported WHERE dispute_id = %s',
+                    (dispute_id,),
+                )
+                row = await cur.fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail="Dispute not found")
+                
+                if row[0] != admin_id:
+                    raise HTTPException(status_code=403, detail="Only assigned admin can add notes")
+
+                # Store note (would need a dispute_notes table in production)
+                # For now, we can append to decision field or create new table
+                await cur.execute(
+                    'UPDATE "Dispute" SET decision = CONCAT(decision, "\n[Admin Note]: " || %s) WHERE dispute_id = %s',
+                    (note, dispute_id),
+                )
+                await conn.commit()
+                
+                return {"status": "success", "message": "Note added to dispute"}
+            except HTTPException:
+                await conn.rollback()
+                raise
+            except Exception as e:
+                await conn.rollback()
+                raise HTTPException(status_code=400, detail=f"Failed to add note: {str(e)}")
+

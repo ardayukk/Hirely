@@ -6,7 +6,8 @@ const AuthContext = createContext(null);
 // 2. Create and configure the axios instance
 const axiosInstance = axios.create({
     baseURL: import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000',
-    withCredentials: true, // This is crucial for sending session cookies
+    // Default to no credentials; enable per-request only if needed
+    withCredentials: false,
 });
 
 export { axiosInstance };

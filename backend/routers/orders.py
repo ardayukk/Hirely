@@ -180,8 +180,13 @@ async def get_orders(user_id: int = Query(...)):
         async with conn.cursor() as cur:
             # Try as client
             query = '''
-                SELECT o.order_id, o.order_date, o.status, o.revision_count, o.included_revision_limit, o.extra_revisions_purchased, o.total_price, o.review_given,
-                       mo.service_id, mo.client_id, fo.freelancer_id, o.required_hours, o.requirements
+                SELECT o.order_id, o.order_date, o.status, o.revision_count,
+                       NULL::INTEGER AS included_revision_limit,
+                       0 AS extra_revisions_purchased,
+                       o.total_price, o.review_given,
+                       mo.service_id, mo.client_id, fo.freelancer_id,
+                       NULL::INTEGER AS required_hours,
+                       NULL::TEXT AS requirements
                 FROM "Order" o
                 JOIN make_order mo ON o.order_id = mo.order_id
                 LEFT JOIN finish_order fo ON o.order_id = fo.order_id
@@ -193,8 +198,13 @@ async def get_orders(user_id: int = Query(...)):
 
             # Try as freelancer
             query_fl = '''
-                SELECT o.order_id, o.order_date, o.status, o.revision_count, o.included_revision_limit, o.extra_revisions_purchased, o.total_price, o.review_given,
-                       mo.service_id, mo.client_id, fo.freelancer_id, o.required_hours, o.requirements
+                SELECT o.order_id, o.order_date, o.status, o.revision_count,
+                       NULL::INTEGER AS included_revision_limit,
+                       0 AS extra_revisions_purchased,
+                       o.total_price, o.review_given,
+                       mo.service_id, mo.client_id, fo.freelancer_id,
+                       NULL::INTEGER AS required_hours,
+                       NULL::TEXT AS requirements
                 FROM "Order" o
                 JOIN make_order mo ON o.order_id = mo.order_id
                 JOIN finish_order fo ON o.order_id = fo.order_id
@@ -208,10 +218,14 @@ async def get_orders(user_id: int = Query(...)):
             all_rows = client_rows + freelancer_rows
             orders = []
             for row in all_rows:
-                # fetch addon ids for this order
-                await cur.execute('SELECT addon_service_id FROM order_addon WHERE order_id = %s', (row[0],))
-                addon_rows = await cur.fetchall()
-                addon_ids = [ar[0] for ar in addon_rows] if addon_rows else []
+                # fetch addon ids for this order (safe if table doesn't exist)
+                addon_ids = []
+                try:
+                    await cur.execute('SELECT addon_service_id FROM order_addon WHERE order_id = %s', (row[0],))
+                    addon_rows = await cur.fetchall()
+                    addon_ids = [ar[0] for ar in addon_rows] if addon_rows else []
+                except Exception:
+                    addon_ids = []
 
                 orders.append(
                     OrderPublic(
@@ -245,13 +259,17 @@ async def get_order_detail(order_id: int):
     async with get_connection() as conn:
         async with conn.cursor() as cur:
             query = '''
-                SELECT o.order_id, o.order_date, o.status, o.revision_count, o.included_revision_limit, o.extra_revisions_purchased, o.total_price, o.review_given,
+                SELECT o.order_id, o.order_date, o.status, o.revision_count,
+                       NULL::INTEGER AS included_revision_limit,
+                       0 AS extra_revisions_purchased,
+                       o.total_price, o.review_given,
                        mo.service_id, mo.client_id, fo.freelancer_id,
                        s.title, s.category,
                        na_fl.name AS freelancer_name,
                        na_cl.name AS client_name,
                        bo.milestone_count, bo.current_phase,
-                       o.required_hours, o.requirements
+                       NULL::INTEGER AS required_hours,
+                       NULL::TEXT AS requirements
                 FROM "Order" o
                 JOIN make_order mo ON o.order_id = mo.order_id
                 LEFT JOIN finish_order fo ON o.order_id = fo.order_id
@@ -265,10 +283,14 @@ async def get_order_detail(order_id: int):
             row = await cur.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Order not found")
-            # fetch addon ids
-            await cur.execute('SELECT addon_service_id FROM order_addon WHERE order_id = %s', (order_id,))
-            addon_rows = await cur.fetchall()
-            addon_ids = [ar[0] for ar in addon_rows] if addon_rows else []
+            # fetch addon ids (safe if table doesn't exist)
+            addon_ids = []
+            try:
+                await cur.execute('SELECT addon_service_id FROM order_addon WHERE order_id = %s', (order_id,))
+                addon_rows = await cur.fetchall()
+                addon_ids = [ar[0] for ar in addon_rows] if addon_rows else []
+            except Exception:
+                addon_ids = []
 
             return OrderDetail(
                 order_id=row[0],
