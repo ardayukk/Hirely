@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Container, Typography, Paper, Table, TableHead, TableRow, TableCell, TableBody, Button, Stack, Chip, TextField, Alert, Divider, Box, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemText } from '@mui/material';
+import { Container, Typography, Paper, Table, TableHead, TableRow, TableCell, TableBody, Button, Stack, Chip, TextField, Alert, Divider, Box, Dialog, DialogTitle, DialogContent, DialogActions, List, ListItem, ListItemText, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { axiosInstance, useAuth } from '../context/Authcontext';
 
 export default function AdminDisputes() {
@@ -11,6 +11,10 @@ export default function AdminDisputes() {
   const [detail, setDetail] = useState(null);
   const [notes, setNotes] = useState('');
   const [statusFilter, setStatusFilter] = useState('OPEN');
+  const [resolutionType, setResolutionType] = useState('REFUND');
+  const [clientAmount, setClientAmount] = useState(0);
+  const [freelancerAmount, setFreelancerAmount] = useState(0);
+  const [resolutionMessage, setResolutionMessage] = useState('');
 
   useEffect(() => {
     if (user?.role === 'admin') {
@@ -55,10 +59,12 @@ export default function AdminDisputes() {
     if (!decision) return;
     try {
       setError('');
-      await axiosInstance.patch(`/api/disputes/${disputeId}/resolve?admin_id=${user.id}`, {
-        decision,
-        outcome,
+      const params = new URLSearchParams({
+        admin_id: user.id,
+        resolution_type: outcome === 'refund' ? 'REFUND' : 'RELEASE',
+        message: decision,
       });
+      await axiosInstance.post(`/api/admin/disputes/${disputeId}/resolve?${params.toString()}`);
       alert(`Dispute ${disputeId} resolved with outcome: ${outcome}`);
       await loadDisputes();
     } catch (err) {
@@ -73,6 +79,11 @@ export default function AdminDisputes() {
       const res = await axiosInstance.get(`/api/admin/disputes/${disputeId}`);
       setDetail(res.data);
       setNotes(res.data?.header?.admin_notes || '');
+      setResolutionMessage(res.data?.header?.resolution_message || '');
+      if (res.data?.header?.total_price) {
+        setClientAmount(res.data.header.total_price);
+        setFreelancerAmount(0);
+      }
       setDetailOpen(true);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to load detail');
@@ -145,6 +156,8 @@ export default function AdminDisputes() {
             <TableRow>
               <TableCell>ID</TableCell>
               <TableCell>Status</TableCell>
+              <TableCell>Payment</TableCell>
+              <TableCell>Payouts</TableCell>
               <TableCell>Order</TableCell>
               <TableCell>Client</TableCell>
               <TableCell>Admin</TableCell>
@@ -157,6 +170,8 @@ export default function AdminDisputes() {
               <TableRow key={d.dispute_id}>
                 <TableCell>{d.dispute_id}</TableCell>
                 <TableCell><Chip label={d.status} color={String(d.status).toUpperCase() === 'RESOLVED' ? 'success' : 'warning'} /></TableCell>
+                <TableCell><Chip label={d.payment_status || '—'} size="small" /></TableCell>
+                <TableCell>{`${d.amount_refunded ?? 0} / ${d.amount_released ?? 0}`}</TableCell>
                 <TableCell>{d.order_id}</TableCell>
                 <TableCell>{d.client_name || d.client_id}</TableCell>
                 <TableCell>{d.freelancer_name || d.freelancer_id || '—'}</TableCell>
@@ -188,9 +203,11 @@ export default function AdminDisputes() {
               <Paper sx={{ p:2 }}>
                 <Typography variant="h6">Header</Typography>
                 <Typography>ID: {detail.header.dispute_id} • Status: {detail.header.status} • Opened: {new Date(detail.header.opened_at).toLocaleString()}</Typography>
-                <Typography>Order: {detail.header.order_id} ({detail.header.order_status}) • Total: {detail.header.total_price ?? '—'}</Typography>
+                <Typography>Order: {detail.header.order_id} ({detail.header.order_status}) • Payment: {detail.header.payment_status || '—'}</Typography>
+                <Typography>Total: {detail.header.total_price ?? '—'} • Released: {detail.header.amount_released ?? 0} • Refunded: {detail.header.amount_refunded ?? 0}</Typography>
                 <Typography>Client: {detail.header.client_name || detail.header.client_id} • Freelancer: {detail.header.freelancer_name || detail.header.freelancer_id}</Typography>
                 <Typography>Description: {detail.header.description || '—'}</Typography>
+                <Typography>Resolution: {detail.header.resolution_message || '—'} {detail.header.closed_at ? `on ${new Date(detail.header.closed_at).toLocaleString()}` : ''}</Typography>
               </Paper>
 
               <Paper sx={{ p:2 }}>
@@ -251,6 +268,56 @@ export default function AdminDisputes() {
               <Paper sx={{ p:2 }}>
                 <Typography variant="h6" gutterBottom>Admin Notes</Typography>
                 <TextField multiline minRows={3} fullWidth value={notes} onChange={(e)=>setNotes(e.target.value)} placeholder="Write internal notes..." />
+              </Paper>
+
+              <Paper sx={{ p:2 }}>
+                <Typography variant="h6" gutterBottom>Resolve Dispute</Typography>
+                <Stack spacing={2}>
+                  <FormControl size="small" sx={{ width: 200 }}>
+                    <InputLabel id="resolution-select">Resolution</InputLabel>
+                    <Select labelId="resolution-select" label="Resolution" value={resolutionType} onChange={(e)=>{
+                      const val = e.target.value;
+                      setResolutionType(val);
+                      const total = detail.header.total_price || 0;
+                      if (val === 'REFUND') {
+                        setClientAmount(total);
+                        setFreelancerAmount(0);
+                      } else if (val === 'RELEASE') {
+                        setClientAmount(0);
+                        setFreelancerAmount(total);
+                      }
+                    }}>
+                      <MenuItem value="REFUND">Refund client</MenuItem>
+                      <MenuItem value="RELEASE">Release to freelancer</MenuItem>
+                      <MenuItem value="SPLIT">Split</MenuItem>
+                    </Select>
+                  </FormControl>
+                  {resolutionType === 'SPLIT' && (
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                      <TextField type="number" label="Client amount" value={clientAmount} onChange={(e)=>setClientAmount(Number(e.target.value))} inputProps={{ min: 0, step: 0.01 }} />
+                      <TextField type="number" label="Freelancer amount" value={freelancerAmount} onChange={(e)=>setFreelancerAmount(Number(e.target.value))} inputProps={{ min: 0, step: 0.01 }} />
+                    </Stack>
+                  )}
+                  <TextField label="Resolution message" fullWidth value={resolutionMessage} onChange={(e)=>setResolutionMessage(e.target.value)} />
+                  <Button variant="contained" color="success" onClick={async () => {
+                    if (!detail) return;
+                    try {
+                      const params = new URLSearchParams({
+                        admin_id: user.id,
+                        resolution_type: resolutionType,
+                        message: resolutionMessage,
+                        client_amount: clientAmount,
+                        freelancer_amount: freelancerAmount,
+                      });
+                      await axiosInstance.post(`/api/admin/disputes/${detail.header.dispute_id}/resolve?${params.toString()}`);
+                      alert('Dispute resolved');
+                      await loadDisputes();
+                      await handleView(detail.header.dispute_id);
+                    } catch (err) {
+                      alert(err.response?.data?.detail || 'Failed to resolve');
+                    }
+                  }}>Apply resolution</Button>
+                </Stack>
               </Paper>
             </Stack>
           )}

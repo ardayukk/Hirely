@@ -102,8 +102,38 @@ CREATE TABLE IF NOT EXISTS "Payment" (
     payment_id SERIAL PRIMARY KEY,
     amount DECIMAL(10, 2) NOT NULL,
     payment_date TIMESTAMPTZ DEFAULT NOW(),
-    released BOOLEAN DEFAULT FALSE
+    released BOOLEAN DEFAULT FALSE,
+    status TEXT DEFAULT 'HELD',
+    released_amount DECIMAL(10, 2) DEFAULT 0,
+    refunded_amount DECIMAL(10, 2) DEFAULT 0,
+    released_at TIMESTAMPTZ,
+    refunded_at TIMESTAMPTZ,
+    CONSTRAINT payment_amount_flow CHECK ((COALESCE(released_amount,0) + COALESCE(refunded_amount,0)) <= amount)
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'payment' AND column_name = 'status') THEN
+        ALTER TABLE "Payment" ADD COLUMN status TEXT DEFAULT 'HELD';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'payment' AND column_name = 'released_amount') THEN
+        ALTER TABLE "Payment" ADD COLUMN released_amount DECIMAL(10, 2) DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'payment' AND column_name = 'refunded_amount') THEN
+        ALTER TABLE "Payment" ADD COLUMN refunded_amount DECIMAL(10, 2) DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'payment' AND column_name = 'released_at') THEN
+        ALTER TABLE "Payment" ADD COLUMN released_at TIMESTAMPTZ;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'payment' AND column_name = 'refunded_at') THEN
+        ALTER TABLE "Payment" ADD COLUMN refunded_at TIMESTAMPTZ;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints WHERE table_name = 'payment' AND constraint_name = 'payment_amount_flow'
+    ) THEN
+        ALTER TABLE "Payment" ADD CONSTRAINT payment_amount_flow CHECK ((COALESCE(released_amount,0) + COALESCE(refunded_amount,0)) <= amount);
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "AnalyticsReport" (
     report_id SERIAL PRIMARY KEY,
@@ -117,6 +147,9 @@ CREATE TABLE IF NOT EXISTS "Order" (
     order_id SERIAL PRIMARY KEY,
     order_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     status TEXT DEFAULT 'pending',
+    payment_status TEXT DEFAULT 'HELD',
+    amount_released DECIMAL(10, 2) DEFAULT 0,
+    amount_refunded DECIMAL(10, 2) DEFAULT 0,
     revision_count INTEGER DEFAULT 0,
     included_revision_limit INTEGER DEFAULT 1,
     extra_revisions_purchased INTEGER NOT NULL DEFAULT 0 CHECK (extra_revisions_purchased >= 0),
@@ -127,6 +160,19 @@ CREATE TABLE IF NOT EXISTS "Order" (
     requirements TEXT,
     FOREIGN KEY (report_id) REFERENCES "AnalyticsReport"(report_id) ON DELETE SET NULL
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'order' AND column_name = 'payment_status') THEN
+        ALTER TABLE "Order" ADD COLUMN payment_status TEXT DEFAULT 'HELD';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'order' AND column_name = 'amount_released') THEN
+        ALTER TABLE "Order" ADD COLUMN amount_released DECIMAL(10, 2) DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'order' AND column_name = 'amount_refunded') THEN
+        ALTER TABLE "Order" ADD COLUMN amount_refunded DECIMAL(10, 2) DEFAULT 0;
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "BigOrder" (
     order_id INTEGER PRIMARY KEY,
@@ -235,10 +281,45 @@ CREATE TABLE IF NOT EXISTS "Dispute" (
     admin_notes TEXT,
     admin_id INTEGER,
     description TEXT,
+    closed_at TIMESTAMPTZ,
+    resolution_message TEXT,
     UNIQUE(order_id),
     FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
     FOREIGN KEY (admin_id) REFERENCES "Admin"(user_id) ON DELETE SET NULL
 );
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'dispute' AND column_name = 'closed_at') THEN
+        ALTER TABLE "Dispute" ADD COLUMN closed_at TIMESTAMPTZ;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'dispute' AND column_name = 'resolution_message') THEN
+        ALTER TABLE "Dispute" ADD COLUMN resolution_message TEXT;
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS "DisputeResolution" (
+    resolution_id SERIAL PRIMARY KEY,
+    dispute_id INTEGER NOT NULL,
+    admin_id INTEGER,
+    resolution_type TEXT NOT NULL,
+    client_amount DECIMAL(10, 2) DEFAULT 0,
+    freelancer_amount DECIMAL(10, 2) DEFAULT 0,
+    message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (dispute_id) REFERENCES "Dispute"(dispute_id) ON DELETE CASCADE,
+    FOREIGN KEY (admin_id) REFERENCES "Admin"(user_id) ON DELETE SET NULL,
+    CONSTRAINT dispute_resolution_amount_flow CHECK (COALESCE(client_amount,0) + COALESCE(freelancer_amount,0) >= 0)
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints WHERE table_name = 'disputeresolution' AND constraint_name = 'dispute_resolution_amount_flow'
+    ) THEN
+        ALTER TABLE "DisputeResolution" ADD CONSTRAINT dispute_resolution_amount_flow CHECK (COALESCE(client_amount,0) + COALESCE(freelancer_amount,0) >= 0);
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS "Report" (
     report_id SERIAL PRIMARY KEY,
