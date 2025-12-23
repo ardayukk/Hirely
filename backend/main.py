@@ -19,6 +19,7 @@ from backend.routers import (
     messages,
     disputes,
     analytics,
+    admin_disputes,
     withdrawals,
     earnings,
     satisfaction,
@@ -48,6 +49,7 @@ app.include_router(orders.router, prefix="/api")
 app.include_router(messages.router, prefix="/api")
 app.include_router(disputes.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
+app.include_router(admin_disputes.router, prefix="/api")
 app.include_router(withdrawals.router)
 app.include_router(earnings.router, prefix="/api")
 app.include_router(satisfaction.router)

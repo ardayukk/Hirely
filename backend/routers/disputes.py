@@ -33,8 +33,8 @@ async def open_dispute(payload: DisputeCreate, client_id: int = Query(...)):
                     raise HTTPException(status_code=403, detail="Order does not belong to client")
 
                 await cur.execute(
-                    'INSERT INTO "Dispute" (decision, resolution_date, status) VALUES (NULL, NULL, %s) RETURNING dispute_id',
-                    ('open',),
+                    'INSERT INTO "Dispute" (order_id, decision, description, status, opened_at) VALUES (%s, NULL, %s, %s, NOW()) RETURNING dispute_id',
+                    (payload.order_id, payload.reason, 'OPEN'),
                 )
                 dispute_id = (await cur.fetchone())[0]
 
@@ -48,10 +48,10 @@ async def open_dispute(payload: DisputeCreate, client_id: int = Query(...)):
                     ('disputed', payload.order_id),
                 )
 
-                # Optionally store reason in decision for tracking
+                # Optionally store reason in decision for tracking (kept for compatibility)
                 if payload.reason:
                     await cur.execute(
-                        'UPDATE "Dispute" SET decision = %s WHERE dispute_id = %s',
+                        'UPDATE "Dispute" SET decision = COALESCE(decision, %s) WHERE dispute_id = %s',
                         (payload.reason, dispute_id),
                     )
 
@@ -59,7 +59,7 @@ async def open_dispute(payload: DisputeCreate, client_id: int = Query(...)):
 
                 return DisputePublic(
                     dispute_id=dispute_id,
-                    status='open',
+                    status='OPEN',
                     decision=payload.reason,
                     resolution_date=None,
                     order_id=payload.order_id,
@@ -93,7 +93,7 @@ async def list_disputes(status: Optional[str] = Query(None)):
                 '''
                 params = []
                 if status:
-                    query += ' WHERE d.status = %s'
+                    query += ' WHERE UPPER(d.status) = UPPER(%s)'
                     params.append(status)
                 query += ' ORDER BY d.dispute_id DESC'
                 await cur.execute(query, params)
@@ -202,7 +202,7 @@ async def resolve_dispute(dispute_id: int, payload: DisputeResolve, admin_id: in
 
                 await cur.execute(
                     'UPDATE "Dispute" SET decision = %s, status = %s, resolution_date = NOW() WHERE dispute_id = %s',
-                    (payload.decision, 'resolved', dispute_id),
+                    (payload.decision, 'RESOLVED', dispute_id),
                 )
 
                 # Fetch order id for status update

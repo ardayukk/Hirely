@@ -225,9 +225,19 @@ CREATE TABLE IF NOT EXISTS "File" (
 
 CREATE TABLE IF NOT EXISTS "Dispute" (
     dispute_id SERIAL PRIMARY KEY,
+    -- legacy columns
     decision TEXT,
     resolution_date TIMESTAMPTZ,
-    status TEXT DEFAULT 'open'
+    -- new fields for Admin Dispute Review Interface (#17)
+    order_id INTEGER,
+    status TEXT DEFAULT 'OPEN',
+    opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    admin_notes TEXT,
+    admin_id INTEGER,
+    description TEXT,
+    UNIQUE(order_id),
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
+    FOREIGN KEY (admin_id) REFERENCES "Admin"(user_id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS "Report" (
@@ -393,6 +403,117 @@ CREATE INDEX IF NOT EXISTS idx_order_date ON "Order"(order_date);
 CREATE INDEX IF NOT EXISTS idx_messages_sender ON "Messages"(sender_id);
 CREATE INDEX IF NOT EXISTS idx_messages_receiver ON "Messages"(receiver_id);
 CREATE INDEX IF NOT EXISTS idx_review_client ON "Review"(client_id);
+
+-- ============================================
+-- ADMIN DISPUTE REVIEW - SCHEMA EXTENSIONS
+-- ============================================
+
+-- Add optional order link to Messages so order chats can be queried in admin view
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Messages' AND column_name = 'order_id'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Messages" ADD COLUMN order_id INTEGER NULL';
+        EXECUTE 'ALTER TABLE "Messages" ADD CONSTRAINT messages_order_fk FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE SET NULL';
+    END IF;
+END $$;
+
+-- Add created_at to Revision for timeline ordering
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Revision' AND column_name = 'created_at'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Revision" ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()';
+    END IF;
+END $$;
+
+-- Ensure Dispute fields and constraints exist (idempotent updates for existing DBs)
+DO $$
+BEGIN
+    -- order_id linkage
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Dispute' AND column_name = 'order_id'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Dispute" ADD COLUMN order_id INTEGER';
+        EXECUTE 'ALTER TABLE "Dispute" ADD CONSTRAINT dispute_order_fk FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE';
+    END IF;
+
+    -- opened_at
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Dispute' AND column_name = 'opened_at'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Dispute" ADD COLUMN opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW()';
+    END IF;
+
+    -- admin_notes
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Dispute' AND column_name = 'admin_notes'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Dispute" ADD COLUMN admin_notes TEXT';
+    END IF;
+
+    -- admin_id
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Dispute' AND column_name = 'admin_id'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Dispute" ADD COLUMN admin_id INTEGER';
+        EXECUTE 'ALTER TABLE "Dispute" ADD CONSTRAINT dispute_admin_fk FOREIGN KEY (admin_id) REFERENCES "Admin"(user_id) ON DELETE SET NULL';
+    END IF;
+
+    -- description
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'Dispute' AND column_name = 'description'
+    ) THEN
+        EXECUTE 'ALTER TABLE "Dispute" ADD COLUMN description TEXT';
+    END IF;
+
+    -- status to uppercase policy and check
+    -- Normalize any legacy statuses to uppercase variants
+    BEGIN
+        EXECUTE 'UPDATE "Dispute" SET status = UPPER(status) WHERE status IS NOT NULL';
+    EXCEPTION WHEN others THEN NULL; END;
+
+    -- Add CHECK constraint if missing
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'dispute_status_check'
+    ) THEN
+        BEGIN
+            EXECUTE 'ALTER TABLE "Dispute" ADD CONSTRAINT dispute_status_check CHECK (status IN (''OPEN'',''RESOLVED'',''INFO_REQUESTED''))';
+        EXCEPTION WHEN others THEN NULL; END;
+    END IF;
+
+    -- Unique per order (only one active dispute per order)
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'dispute_order_unique'
+    ) THEN
+        BEGIN
+            EXECUTE 'ALTER TABLE "Dispute" ADD CONSTRAINT dispute_order_unique UNIQUE(order_id)';
+        EXCEPTION WHEN others THEN NULL; END;
+    END IF;
+END $$;
+
+-- DisputeEvidence table for file submissions by both parties
+CREATE TABLE IF NOT EXISTS "DisputeEvidence" (
+    evidence_id SERIAL PRIMARY KEY,
+    dispute_id INTEGER NOT NULL,
+    submitted_by_user_id INTEGER NOT NULL,
+    description TEXT,
+    file_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (dispute_id) REFERENCES "Dispute"(dispute_id) ON DELETE CASCADE,
+    FOREIGN KEY (submitted_by_user_id) REFERENCES "User"(user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_disputeevidence_dispute ON "DisputeEvidence"(dispute_id);
 
 -- Allow reported.admin_id to be nullable (admin can be assigned later)
 DO $$
