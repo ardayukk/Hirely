@@ -456,29 +456,26 @@ async def get_conversation(order_id: int = Query(...), user_id: int = Query(...)
                 await cur.execute(
                     '''
                     SELECT m.message_id, m.sender_id, ns.name, m.receiver_id, nr.name,
-                           m.message_text, m.timestamp, m.is_read, m.reply_to_id,
+                           m.message_text, m.created_at, m.is_read, NULL::INTEGER,
                            f.file_id, f.file_name, f.file_path, f.file_type
                     FROM "Messages" m
-                    JOIN "Send_Message" sm ON sm.message_id = m.message_id
-                    JOIN "NonAdmin" ns ON ns.user_id = m.sender_id
-                    JOIN "NonAdmin" nr ON nr.user_id = m.receiver_id
+                    LEFT JOIN "NonAdmin" ns ON ns.user_id = m.sender_id
+                    LEFT JOIN "NonAdmin" nr ON nr.user_id = m.receiver_id
                     LEFT JOIN "File" f ON f.message_id = m.message_id
-                    WHERE sm.client_id = %s AND sm.freelancer_id = %s AND m.order_id = %s
-                    ORDER BY m.timestamp ASC
+                    WHERE m.order_id = %s
+                    ORDER BY m.created_at ASC
                     ''',
-                    (client_id, freelancer_id, order_id),
+                    (order_id,),
                 )
                 rows = await cur.fetchall()
 
+                # Mark messages as read for the current user
                 await cur.execute(
                     '''
                     UPDATE "Messages" SET is_read = TRUE
-                    WHERE receiver_id = %s AND message_id IN (
-                        SELECT message_id FROM "Receive_Message"
-                        WHERE client_id = %s AND freelancer_id = %s
-                    )
+                    WHERE receiver_id = %s AND order_id = %s AND is_read = FALSE
                     ''',
-                    (user_id, client_id, freelancer_id),
+                    (user_id, order_id),
                 )
                 await conn.commit()
 
