@@ -52,6 +52,14 @@ class ReviewSummary(BaseModel):
     client_id: int
 
 
+class ServiceAddon(BaseModel):
+    addon_id: int
+    title: str
+    description: Optional[str] = None
+    price: float
+    delivery_time_extension: int = 0
+
+
 class ServiceDetail(BaseModel):
     service_id: int
     title: str
@@ -65,7 +73,7 @@ class ServiceDetail(BaseModel):
     freelancer: FreelancerSummary
     sample_work: Optional[str] = None
     reviews: List[ReviewSummary] = []
-    addons: List[ServicePublic] = []
+    addons: List[ServiceAddon] = []
 
 
 class SampleWorkUpdate(BaseModel):
