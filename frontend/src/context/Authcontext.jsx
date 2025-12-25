@@ -64,13 +64,13 @@ export function AuthProvider({ children }) {
         }
     }
 
-    async function register({ username, email, password }) {
+    async function register({ username, email, password, role }) {
         try {
             const response = await axiosInstance.post('/api/auth/register', {
                 username,
                 email,
                 password,
-                role: 'client',
+                role: role || 'client',
             });
 
             setUser(response.data);
