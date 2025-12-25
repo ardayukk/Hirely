@@ -166,14 +166,14 @@ export default function OrderDetail() {
       }
       await axiosInstance.post(`/api/orders/${orderId}/work/upload?freelancer_id=${user.id}`, form);
 
-      // Then mark the order as delivered
-      await axiosInstance.patch(`/api/orders/${orderId}/deliver?freelancer_id=${user.id}`);
+      // Then mark the order as delivered (or advance milestone for big orders)
+      const deliverRes = await axiosInstance.patch(`/api/orders/${orderId}/deliver?freelancer_id=${user.id}`);
 
       await fetchOrder();
       await loadMessages();
       setDeliveryFile(null);
       setDeliveryNote('');
-      alert('Order marked as delivered');
+      alert(deliverRes.data?.message || 'Work submitted successfully');
     } catch (err) {
       let detail = 'Failed to deliver order';
       if (err.response?.data?.detail) {
@@ -393,9 +393,21 @@ export default function OrderDetail() {
 
             {order.is_big_order && (
               <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" color="text.secondary">Milestones</Typography>
-                <Typography variant="body1">
-                  Phase {order.current_phase} of {order.milestone_count}
+                <Typography variant="body2" color="text.secondary">Big Order Progress</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                  <Typography variant="body1" fontWeight="bold">
+                    Milestone {order.current_phase} of {order.milestone_count}
+                  </Typography>
+                  <Chip 
+                    size="small" 
+                    label={`${Math.min(100, Math.round((order.current_phase / order.milestone_count) * 100))}%`}
+                    color={order.current_phase >= order.milestone_count ? 'success' : 'primary'}
+                  />
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  {order.current_phase >= order.milestone_count 
+                    ? 'All milestones submitted - awaiting client approval' 
+                    : `${order.milestone_count - order.current_phase} milestone(s) remaining`}
                 </Typography>
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="subtitle2">Deliverables</Typography>
@@ -448,7 +460,15 @@ export default function OrderDetail() {
             {isFreelancer && order.status === 'in_progress' && (
               <>
                 <Box sx={{ border: '1px dashed', borderColor: 'grey.400', borderRadius: 1, p: 2, mb: 1 }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Attach final delivery</Typography>
+                  {order.is_big_order && (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      <strong>Milestone {order.current_phase} of {order.milestone_count}</strong><br/>
+                      Submit work for this phase. You'll need to deliver {order.milestone_count} times total.
+                    </Alert>
+                  )}
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    {order.is_big_order ? `Submit Milestone ${order.current_phase}` : 'Attach final delivery'}
+                  </Typography>
                   <Button
                     variant="outlined"
                     component="label"
@@ -481,7 +501,7 @@ export default function OrderDetail() {
                     onClick={handleDeliver}
                     disabled={deliverySending}
                   >
-                    {deliverySending ? 'Uploading...' : 'Upload & Mark as Delivered'}
+                    {deliverySending ? 'Uploading...' : (order.is_big_order ? `Submit Milestone ${order.current_phase}` : 'Upload & Mark as Delivered')}
                   </Button>
                   {deliveryError && (
                     <Alert severity="error" sx={{ mt: 1 }}>{deliveryError}</Alert>
