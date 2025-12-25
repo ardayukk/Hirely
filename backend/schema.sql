@@ -430,6 +430,41 @@ CREATE TABLE IF NOT EXISTS "reported" (
 );
 
 -- ============================================
+-- WITHDRAWALS
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS "WithdrawalMethod" (
+    method_id SERIAL PRIMARY KEY,
+    freelancer_id INTEGER NOT NULL,
+    method_type TEXT NOT NULL CHECK (method_type IN ('bank_account', 'paypal')),
+    account_holder_name TEXT,
+    account_number TEXT,
+    bank_name TEXT,
+    swift_code TEXT,
+    paypal_email TEXT,
+    is_default BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "Withdrawal" (
+    withdrawal_id SERIAL PRIMARY KEY,
+    freelancer_id INTEGER NOT NULL,
+    withdrawal_method_id INTEGER NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    fee DECIMAL(10, 2) DEFAULT 0,
+    net_amount DECIMAL(10, 2) NOT NULL,
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed', 'cancelled')),
+    requested_at TIMESTAMPTZ DEFAULT NOW(),
+    processing_started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    notes TEXT,
+    transaction_reference TEXT,
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (withdrawal_method_id) REFERENCES "WithdrawalMethod"(method_id) ON DELETE SET NULL
+);
+
+-- ============================================
 -- NOTIFICATIONS
 -- ============================================
 

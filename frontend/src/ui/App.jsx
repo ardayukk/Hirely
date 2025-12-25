@@ -30,6 +30,7 @@ import ServiceDetail from '../pages/ServiceDetail';
 import Services from '../pages/Services';
 import ServiceVersions from '../pages/ServiceVersions';
 import Warranty from '../pages/Warranty';
+import Withdrawals from '../pages/Withdrawals';
 import Workspace from '../pages/Workspace';
 import { ThemeModeContext } from './main';
 
@@ -115,6 +116,7 @@ function AppContent() {
                     <Route path="/warranty/:orderId" element={requireAuth(<Warranty />)} />
                     <Route path="/pricing-history/:serviceId" element={requireAuth(<PricingHistory />)} />
                     <Route path="/service-versions/:serviceId" element={requireAuth(<ServiceVersions />)} />
+                    <Route path="/withdrawals" element={requireAuth(<Withdrawals />)} />
                     <Route path="/logout" element={<Logout />} />
 
                     <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />

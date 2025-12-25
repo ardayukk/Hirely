@@ -12,7 +12,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 async def _fetch_profile(cur, user_id: int) -> Optional[UserProfile]:
     query = (
         'SELECT U.user_id, U.email, U.date_joined, '
-        'NA.name, NA.biography, NA.phone, NA.address, NA.age, NA.wallet_balance, '
+        'NA.name, NA.phone, NA.address, NA.wallet_balance, '
         'C.display_name, '
         'F.tagline, F.avg_rating, F.total_orders, F.total_reviews, '
         'A.username '
@@ -33,10 +33,8 @@ async def _fetch_profile(cur, user_id: int) -> Optional[UserProfile]:
         email,
         date_joined,
         name,
-        biography,
         phone,
         address,
-        age,
         wallet_balance,
         display_name,
         tagline,
@@ -64,10 +62,10 @@ async def _fetch_profile(cur, user_id: int) -> Optional[UserProfile]:
         email=email,
         date_joined=str(date_joined),
         name=resolved_name,
-        biography=biography,
+        biography=None,
         phone=phone,
         address=address,
-        age=age,
+        age=None,
         wallet_balance=float(wallet_balance) if isinstance(wallet_balance, Decimal) else wallet_balance,
         display_name=display_name,
         tagline=tagline,
@@ -114,10 +112,8 @@ async def update_profile(user_id: int, payload: UserUpdate):
                 # NonAdmin fields
                 nonadmin_fields = {
                     "name": payload.name,
-                    "biography": payload.biography,
                     "phone": payload.phone,
                     "address": payload.address,
-                    "age": payload.age,
                 }
                 set_clauses = []
                 values = []
