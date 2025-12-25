@@ -33,7 +33,7 @@ export default function ServiceDetail() {
         setService(res.data);
         // Preselect none; preserve existing selection if IDs still present
         if (res.data?.addons?.length) {
-          setSelectedAddons((prev) => prev.filter((id) => res.data.addons.some((a) => a.service_id === id)));
+          setSelectedAddons((prev) => prev.filter((id) => res.data.addons.some((a) => a.addon_id === id)));
         } else {
           setSelectedAddons([]);
         }
@@ -260,7 +260,7 @@ export default function ServiceDetail() {
             )}
 
             {/* Add-ons */}
-            {service.addons.length > 0 && (
+            {service.addons && service.addons.length > 0 && (
               <>
                 <Divider sx={{ my: 3 }} />
                 <Box mb={3}>
@@ -269,7 +269,7 @@ export default function ServiceDetail() {
                   </Typography>
                   <Grid container spacing={2}>
                     {service.addons.map((addon) => (
-                      <Grid item xs={12} sm={6} key={addon.service_id}>
+                      <Grid item xs={12} sm={6} key={addon.addon_id}>
                         <Card
                           sx={{
                             p: 2,
@@ -283,18 +283,22 @@ export default function ServiceDetail() {
                           <FormControlLabel
                             control={
                               <Checkbox
-                                checked={selectedAddons.includes(addon.service_id)}
-                                onChange={() => toggleAddon(addon.service_id)}
+                                checked={selectedAddons.includes(addon.addon_id)}
+                                onChange={() => toggleAddon(addon.addon_id)}
                                 color="primary"
                               />
                             }
                             label={
-                              <Box onClick={() => toggleAddon(addon.service_id)} sx={{ cursor: "pointer" }}>
+                              <Box onClick={() => toggleAddon(addon.addon_id)} sx={{ cursor: "pointer" }}>
                                 <Typography variant="body1" sx={{ fontWeight: "bold", color: colors.color1 }}>
                                   {addon.title}
                                 </Typography>
-                                <Typography variant="body2" sx={{ color: colors.color3 }}>
-                                  ${addon.hourly_price ? addon.hourly_price.toFixed(2) : "N/A"}/hr | ★ {addon.average_rating.toFixed(1)}
+                                <Typography variant="body2" sx={{ color: colors.color3, mb: 0.5 }}>
+                                  {addon.description || "No description"}
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: colors.color1, fontWeight: "bold" }}>
+                                  +${addon.price ? addon.price.toFixed(2) : "0.00"}
+                                  {addon.delivery_time_extension > 0 && ` | +${addon.delivery_time_extension} days`}
                                 </Typography>
                               </Box>
                             }
@@ -308,7 +312,7 @@ export default function ServiceDetail() {
             )}
 
             {/* Action Buttons */}
-            <Box display="flex" gap={2} mt={4}>
+            <Box display="flex" gap={2} mt={4} flexWrap="wrap">
               {service.freelancer?.user_id === undefined ? null : (
                 service.freelancer.user_id === (typeof window !== 'undefined' && window.localStorage.getItem('hirely_user') ? JSON.parse(window.localStorage.getItem('hirely_user')).id : null)
                   ? (
@@ -351,7 +355,93 @@ export default function ServiceDetail() {
                       </Button>
                     )
               )}
-              {service.freelancer?.user_id !== user?.id}
+              {service.freelancer?.user_id !== user?.id && user?.role === 'client' && (
+                <Button
+                  variant="outlined"
+                  sx={{
+                    py: 1.5,
+                    px: 3,
+                    color: colors.color1,
+                    borderColor: colors.color1,
+                    fontWeight: "bold",
+                    "&:hover": { backgroundColor: colors.color4 },
+                  }}
+                  onClick={async () => {
+                    try {
+                      await axiosInstance.post(`/api/favorites?client_id=${user.id}`, { service_id: service.service_id });
+                      alert('Added to favorites');
+                    } catch (err) {
+                      alert(err.response?.data?.detail || 'Failed to add favorite');
+                    }
+                  }}
+                >
+                  Favorite
+                </Button>
+              )}
+              <Button
+                variant="outlined"
+                sx={{
+                  py: 1.5,
+                  px: 3,
+                  color: colors.color1,
+                  borderColor: colors.color1,
+                  fontWeight: "bold",
+                  "&:hover": {
+                    backgroundColor: colors.color4,
+                  },
+                }}
+                onClick={() => navigate(`/portfolio/${service.freelancer?.user_id}`)}
+              >
+                Portfolio
+              </Button>
+              <Button
+                variant="outlined"
+                sx={{
+                  py: 1.5,
+                  px: 3,
+                  color: colors.color1,
+                  borderColor: colors.color1,
+                  fontWeight: "bold",
+                  "&:hover": {
+                    backgroundColor: colors.color4,
+                  },
+                }}
+                onClick={() => navigate(`/availability/${service.freelancer?.user_id}`)}
+              >
+                Availability
+              </Button>
+              <Button
+                variant="outlined"
+                sx={{
+                  py: 1.5,
+                  px: 3,
+                  color: colors.color1,
+                  borderColor: colors.color1,
+                  fontWeight: "bold",
+                  "&:hover": {
+                    backgroundColor: colors.color4,
+                  },
+                }}
+                onClick={() => navigate(`/pricing-history/${service.service_id}`)}
+              >
+                Pricing History
+              </Button>
+              <Button
+                variant="outlined"
+                sx={{
+                  py: 1.5,
+                  px: 3,
+                  color: colors.color1,
+                  borderColor: colors.color1,
+                  fontWeight: "bold",
+                  "&:hover": {
+                    backgroundColor: colors.color4,
+                  },
+                }}
+                onClick={() => navigate(`/service-versions/${service.service_id}`)}
+              >
+                Version History
+              </Button>
               <Button
                 variant="outlined"
                 sx={{

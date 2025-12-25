@@ -39,11 +39,12 @@ async def create_service(service: ServiceCreate, freelancer_id: int = Query(...)
                 # 1. Insert into Service
                 await cur.execute(
                     """
-                    INSERT INTO "Service" (title, category, description, delivery_time, hourly_price, package_tier, status, average_rating)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO "Service" (freelancer_id, title, category, description, delivery_time, hourly_price, package_tier, status, average_rating)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING service_id
                     """,
                     (
+                        freelancer_id,
                         service.title,
                         service.category,
                         service.description,
@@ -184,28 +185,43 @@ async def browse_services(
 @router.get("/{service_id}", response_model=ServiceDetail)
 async def get_service_details(service_id: int):
     """
-    View full service details with freelancer info, reviews, sample work, and add-ons.
-    Maps to: "View Full Service Details" query from design doc.
+    View full service details with freelancer info and reviews.
+    Updated to match current simplified schema (no SampleWork, no add_on pairs).
     """
     async with get_connection() as conn:
         async with conn.cursor() as cur:
-            # Main service + freelancer + sample work
-            query = """
-                SELECT
-                  s.service_id, s.title, s.category, s.description, s.delivery_time,
-                  s.hourly_price, s.package_tier, s.status, s.average_rating,
-                  f.user_id, f.tagline, f.avg_rating, f.total_orders, f.total_reviews,
-                  sw.sample_work,
-                  na.name
-                FROM "Service" s
-                JOIN create_service cs ON s.service_id = cs.service_id
-                JOIN "Freelancer" f ON cs.freelancer_id = f.user_id
-                JOIN "NonAdmin" na ON f.user_id = na.user_id
-                LEFT JOIN "SampleWork" sw ON s.service_id = sw.service_id
-                WHERE s.service_id = %s
-            """
-            await cur.execute(query, (service_id,))
-            row = await cur.fetchone()
+            # Main service + freelancer (prefer direct FK, fallback to create_service)
+            row = None
+            try:
+                query_direct = """
+                    SELECT
+                      s.service_id, s.title, s.category, s.description, s.delivery_time,
+                      s.hourly_price, s.package_tier, s.status, s.average_rating,
+                      f.user_id, f.tagline, f.avg_rating, f.total_orders, f.total_reviews,
+                      na.name
+                    FROM "Service" s
+                    JOIN "Freelancer" f ON s.freelancer_id = f.user_id
+                    JOIN "NonAdmin" na ON f.user_id = na.user_id
+                    WHERE s.service_id = %s
+                """
+                await cur.execute(query_direct, (service_id,))
+                row = await cur.fetchone()
+            except Exception:
+                # Fallback for legacy schema without Service.freelancer_id
+                query_fallback = """
+                    SELECT
+                      s.service_id, s.title, s.category, s.description, s.delivery_time,
+                      s.hourly_price, s.package_tier, s.status, s.average_rating,
+                      f.user_id, f.tagline, f.avg_rating, f.total_orders, f.total_reviews,
+                      na.name
+                    FROM "Service" s
+                    JOIN create_service cs ON s.service_id = cs.service_id
+                    JOIN "Freelancer" f ON cs.freelancer_id = f.user_id
+                    JOIN "NonAdmin" na ON f.user_id = na.user_id
+                    WHERE s.service_id = %s
+                """
+                await cur.execute(query_fallback, (service_id,))
+                row = await cur.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Service not found")
 
@@ -213,7 +229,7 @@ async def get_service_details(service_id: int):
                 sid, title, category, description, delivery_time,
                 hourly_price, package_tier, status, average_rating,
                 freelancer_id, tagline, freelancer_rating, total_orders, total_reviews,
-                sample_work, freelancer_name
+                freelancer_name
             ) = row
 
             freelancer = FreelancerSummary(
@@ -225,12 +241,22 @@ async def get_service_details(service_id: int):
                 total_reviews=total_reviews,
             )
 
-            # Fetch reviews
+            # Fetch sample work
+            sample_work = None
+            try:
+                await cur.execute('SELECT sample_work FROM "SampleWork" WHERE service_id = %s', (service_id,))
+                sw_row = await cur.fetchone()
+                if sw_row:
+                    sample_work = sw_row[0]
+            except Exception:
+                pass
+
+            # Fetch reviews for this service via orders
             reviews_query = """
                 SELECT r.review_id, r.rating, r.comment, r.client_id
-                FROM give_review gr
-                JOIN "Review" r ON gr.review_id = r.review_id
-                WHERE gr.service_id = %s
+                FROM "Review" r
+                JOIN "Order" o ON r.order_id = o.order_id
+                WHERE o.service_id = %s
             """
             await cur.execute(reviews_query, (service_id,))
             review_rows = await cur.fetchall()
@@ -239,30 +265,26 @@ async def get_service_details(service_id: int):
                 for rr in review_rows
             ]
 
-            # Fetch add-ons
-            addons_query = """
-                SELECT s2.service_id, s2.title, s2.category, s2.description, s2.delivery_time,
-                       s2.hourly_price, s2.package_tier, s2.status, s2.average_rating
-                FROM add_on a
-                JOIN "Service" s2 ON (a.service_id2 = s2.service_id OR a.service_id1 = s2.service_id)
-                WHERE (a.service_id1 = %s OR a.service_id2 = %s) AND s2.service_id != %s
-            """
-            await cur.execute(addons_query, (service_id, service_id, service_id))
-            addon_rows = await cur.fetchall()
-            addons = [
-                ServicePublic(
-                    service_id=ar[0],
-                    title=ar[1],
-                    category=ar[2],
-                    description=ar[3],
-                    delivery_time=ar[4],
-                    hourly_price=float(ar[5]) if isinstance(ar[5], Decimal) else ar[5],
-                    package_tier=ar[6],
-                    status=ar[7],
-                    average_rating=float(ar[8]) if isinstance(ar[8], Decimal) else ar[8],
+            # Fetch service addons
+            addons: List[dict] = []
+            try:
+                await cur.execute(
+                    'SELECT addon_id, title, description, price, delivery_time_extension FROM "ServiceAddon" WHERE service_id = %s',
+                    (service_id,)
                 )
-                for ar in addon_rows
-            ]
+                addon_rows = await cur.fetchall()
+                addons = [
+                    {
+                        "addon_id": ar[0],
+                        "title": ar[1],
+                        "description": ar[2],
+                        "price": float(ar[3]) if isinstance(ar[3], Decimal) else ar[3],
+                        "delivery_time_extension": ar[4]
+                    }
+                    for ar in addon_rows
+                ]
+            except Exception:
+                pass
 
             return ServiceDetail(
                 service_id=sid,
@@ -610,3 +632,41 @@ async def get_categories():
             """)
             rows = await cur.fetchall()
             return [row[0] for row in rows]
+
+@router.get("/{service_id}/versions")
+async def get_service_versions(service_id: int):
+    """
+    Get all version history for a service.
+    Returns versions ordered by version_number descending (newest first).
+    """
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify service exists
+            await cur.execute('SELECT service_id FROM "Service" WHERE service_id = %s', (service_id,))
+            if not await cur.fetchone():
+                raise HTTPException(status_code=404, detail="Service not found")
+
+            # Fetch service versions
+            await cur.execute(
+                """
+                SELECT version_id, service_id, version_number, features, change_description, created_at
+                FROM "ServiceVersion"
+                WHERE service_id = %s
+                ORDER BY version_number DESC
+                """,
+                (service_id,)
+            )
+            rows = await cur.fetchall()
+            
+            versions = []
+            for row in rows:
+                versions.append({
+                    "version_id": row[0],
+                    "service_id": row[1],
+                    "version_number": row[2],
+                    "features": row[3],
+                    "change_description": row[4],
+                    "created_at": row[5].isoformat() if row[5] else None,
+                })
+            
+            return versions

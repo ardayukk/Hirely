@@ -26,6 +26,8 @@ export default function OrderDetail() {
   const [disputeResponse, setDisputeResponse] = useState('');
   const [disputeResponseLoading, setDisputeResponseLoading] = useState(false);
   const [disputeResponseError, setDisputeResponseError] = useState('');
+  const [deliverables, setDeliverables] = useState([]);
+  const [loadingDeliverables, setLoadingDeliverables] = useState(false);
 
   useEffect(() => {
     fetchOrder();
@@ -48,11 +50,28 @@ export default function OrderDetail() {
       setLoading(true);
       const res = await axiosInstance.get(`/api/orders/${orderId}`);
       setOrder(res.data);
+      if (res.data?.is_big_order) {
+        await loadDeliverables();
+      } else {
+        setDeliverables([]);
+      }
     } catch (err) {
       console.error('Failed to load order', err);
       setError(err.response?.data?.detail || 'Failed to load order details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDeliverables = async () => {
+    try {
+      setLoadingDeliverables(true);
+      const res = await axiosInstance.get(`/api/orders/${orderId}/deliverables`);
+      setDeliverables(res.data || []);
+    } catch (err) {
+      console.error('Failed to load deliverables', err);
+    } finally {
+      setLoadingDeliverables(false);
     }
   };
 
@@ -256,7 +275,10 @@ export default function OrderDetail() {
     return (
       <Container sx={{ mt: 4 }}>
         <Alert severity="error">{error || 'Order not found'}</Alert>
-        <Button sx={{ mt: 2 }} onClick={() => navigate('/orders')}>Back to Orders</Button>
+        <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+          <Button onClick={() => navigate('/orders')}>Back to Orders</Button>
+          <Button onClick={() => navigate(`/warranty/${orderId}`)}>View Warranty</Button>
+        </Box>
       </Container>
     );
   }
@@ -309,6 +331,23 @@ export default function OrderDetail() {
                 <Typography variant="body1">
                   Phase {order.current_phase} of {order.milestone_count}
                 </Typography>
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2">Deliverables</Typography>
+                  {loadingDeliverables ? (
+                    <CircularProgress size={20} sx={{ mt: 1 }} />
+                  ) : deliverables.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">No deliverables yet.</Typography>
+                  ) : (
+                    deliverables.map((d) => (
+                      <Box key={d.deliverable_id} sx={{ py: 1 }}>
+                        <Typography variant="body2">#{d.deliverable_id}: {d.description}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Due: {d.due_date ? new Date(d.due_date).toLocaleString() : 'N/A'} | Status: {d.status}
+                        </Typography>
+                      </Box>
+                    ))
+                  )}
+                </Box>
               </Box>
             )}
           </Paper>
@@ -411,6 +450,12 @@ export default function OrderDetail() {
             {isClient && !['disputed', 'cancelled'].includes(order.status) && (
               <Button fullWidth variant="outlined" color="warning" sx={{ mb: 1 }} onClick={handleOpenDispute} disabled={disputeLoading}>
                 {disputeLoading ? 'Opening Dispute...' : 'Open Dispute'}
+              </Button>
+            )}
+
+            {['completed', 'delivered'].includes(order.status) && (
+              <Button fullWidth variant="outlined" sx={{ mb: 1 }} onClick={() => navigate(`/warranty/${orderId}`)}>
+                View Warranty & Claims
               </Button>
             )}
 

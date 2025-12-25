@@ -25,6 +25,12 @@ import ServiceDetail from '../pages/ServiceDetail';
 import EditService from '../pages/EditService';
 import CreateService from '../pages/CreateService';
 import MyServices from '../pages/MyServices';
+import Favorites from '../pages/Favorites';
+import Portfolio from '../pages/Portfolio';
+import Availability from '../pages/Availability';
+import Warranty from '../pages/Warranty';
+import PricingHistory from '../pages/PricingHistory';
+import ServiceVersions from '../pages/ServiceVersions';
 import { ThemeModeContext } from './main';
 
 function AppContent() {
@@ -70,6 +76,7 @@ function AppContent() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Button component={Link} to="/notifications">Notifications</Button>
                             <Button component={Link} to="/services" variant="text">Services</Button>
+                            {user?.role === 'client' && <Button component={Link} to="/favorites">Favorites</Button>}
                             <Button component={Link} to="/profile">Profile</Button>
                             <Button onClick={handleLogout}>Logout</Button>
                             <ThemeToggle />
@@ -101,6 +108,12 @@ function AppContent() {
                 <Route path="/services/:serviceId/edit" element={requireAuth(<EditService />)} />
                 <Route path="/create-service" element={requireAuth(<CreateService />)} />
                 <Route path="/myServices" element={requireAuth(<MyServices />)} />
+                <Route path="/favorites" element={requireAuth(<Favorites />)} />
+                <Route path="/portfolio/:freelancerId" element={requireAuth(<Portfolio />)} />
+                <Route path="/availability/:freelancerId" element={requireAuth(<Availability />)} />
+                <Route path="/warranty/:orderId" element={requireAuth(<Warranty />)} />
+                <Route path="/pricing-history/:serviceId" element={requireAuth(<PricingHistory />)} />
+                <Route path="/service-versions/:serviceId" element={requireAuth(<ServiceVersions />)} />
                 <Route path="/logout" element={<Logout />} />
 
                 <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />

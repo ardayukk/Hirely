@@ -62,6 +62,14 @@ CREATE TABLE IF NOT EXISTS "Service" (
     FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS "SampleWork" (
+    sample_work_id SERIAL PRIMARY KEY,
+    service_id INTEGER NOT NULL UNIQUE,
+    sample_work TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (service_id) REFERENCES "Service"(service_id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS "Review" (
     review_id SERIAL PRIMARY KEY,
     order_id INTEGER NOT NULL,
@@ -202,65 +210,6 @@ CREATE TABLE IF NOT EXISTS "Favorite" (
 );
 
 -- ============================================
--- EXTRA FEATURE: Referral/Affiliate System
--- ============================================
-
-CREATE TABLE IF NOT EXISTS "Referral" (
-    referral_id SERIAL PRIMARY KEY,
-    referrer_id INTEGER NOT NULL,
-    referred_id INTEGER NOT NULL,
-    referral_code TEXT UNIQUE NOT NULL,
-    commission_earned DECIMAL(10,2) DEFAULT 0,
-    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'completed', 'cancelled')),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    activated_at TIMESTAMPTZ,
-    FOREIGN KEY (referrer_id) REFERENCES "User"(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (referred_id) REFERENCES "User"(user_id) ON DELETE CASCADE
-);
-
--- ============================================
--- EXTRA FEATURE: Skill Certification System
--- ============================================
-
-CREATE TABLE IF NOT EXISTS "Skill" (
-    skill_id SERIAL PRIMARY KEY,
-    skill_name TEXT UNIQUE NOT NULL,
-    category TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS "FreelancerSkill" (
-    freelancer_id INTEGER NOT NULL,
-    skill_id INTEGER NOT NULL,
-    proficiency_level TEXT CHECK (proficiency_level IN ('beginner', 'intermediate', 'expert')),
-    verified BOOLEAN DEFAULT FALSE,
-    verified_at TIMESTAMPTZ,
-    verified_by INTEGER,
-    PRIMARY KEY (freelancer_id, skill_id),
-    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (skill_id) REFERENCES "Skill"(skill_id) ON DELETE CASCADE,
-    FOREIGN KEY (verified_by) REFERENCES "Admin"(user_id) ON DELETE SET NULL
-);
-
--- ============================================
--- EXTRA FEATURE: Saved Search/Alerts
--- ============================================
-
-CREATE TABLE IF NOT EXISTS "SavedSearch" (
-    search_id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    search_name TEXT NOT NULL,
-    category TEXT,
-    min_price DECIMAL(10,2),
-    max_price DECIMAL(10,2),
-    min_rating DECIMAL(3,2),
-    keywords TEXT,
-    alert_enabled BOOLEAN DEFAULT TRUE,
-    last_alerted_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    FOREIGN KEY (user_id) REFERENCES "User"(user_id) ON DELETE CASCADE
-);
-
--- ============================================
 -- NOVEL EXTRA FEATURE: Service Availability Calendar/Booking Slots
 -- ============================================
 
@@ -293,23 +242,6 @@ CREATE TABLE IF NOT EXISTS "PricingHistory" (
 );
 
 -- ============================================
--- NOVEL EXTRA FEATURE: Team Collaboration (Multiple Freelancers per Order)
--- ============================================
-
-CREATE TABLE IF NOT EXISTS "OrderTeam" (
-    team_id SERIAL PRIMARY KEY,
-    order_id INTEGER NOT NULL,
-    freelancer_id INTEGER NOT NULL,
-    role TEXT NOT NULL,
-    percentage_share DECIMAL(5,2) NOT NULL,
-    invited_at TIMESTAMPTZ DEFAULT NOW(),
-    accepted_at TIMESTAMPTZ,
-    status TEXT DEFAULT 'invited' CHECK (status IN ('invited', 'accepted', 'declined', 'removed')),
-    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
-    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE
-);
-
--- ============================================
 -- NOVEL EXTRA FEATURE: Service Warranty/Guarantee System
 -- ============================================
 
@@ -339,63 +271,6 @@ CREATE TABLE IF NOT EXISTS "WarrantyClaim" (
 );
 
 -- ============================================
--- NOVEL EXTRA FEATURE: Anonymous Feedback (Separate from Public Reviews)
--- ============================================
-
-CREATE TABLE IF NOT EXISTS "AnonymousFeedback" (
-    feedback_id SERIAL PRIMARY KEY,
-    order_id INTEGER NOT NULL,
-    submitted_by_role TEXT NOT NULL CHECK (submitted_by_role IN ('client', 'freelancer')),
-    category TEXT NOT NULL,
-    feedback_text TEXT NOT NULL,
-    sentiment_score INTEGER CHECK (sentiment_score BETWEEN 1 AND 5),
-    is_visible_to_admins_only BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE
-);
-
--- ============================================
--- NOVEL EXTRA FEATURE: Service Bundling (Package Deals)
--- ============================================
-
-CREATE TABLE IF NOT EXISTS "ServiceBundle" (
-    bundle_id SERIAL PRIMARY KEY,
-    freelancer_id INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    description TEXT,
-    total_price DECIMAL(10,2) NOT NULL,
-    discount_percentage DECIMAL(5,2) DEFAULT 0,
-    active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS "BundleService" (
-    bundle_id INTEGER NOT NULL,
-    service_id INTEGER NOT NULL,
-    quantity INTEGER DEFAULT 1,
-    PRIMARY KEY (bundle_id, service_id),
-    FOREIGN KEY (bundle_id) REFERENCES "ServiceBundle"(bundle_id) ON DELETE CASCADE,
-    FOREIGN KEY (service_id) REFERENCES "Service"(service_id) ON DELETE CASCADE
-);
-
--- ============================================
--- NOVEL EXTRA FEATURE: Client Project Templates/Requirements Library
--- ============================================
-
-CREATE TABLE IF NOT EXISTS "RequirementTemplate" (
-    template_id SERIAL PRIMARY KEY,
-    client_id INTEGER NOT NULL,
-    template_name TEXT NOT NULL,
-    category TEXT NOT NULL,
-    requirements_json TEXT NOT NULL,
-    is_public BOOLEAN DEFAULT FALSE,
-    usage_count INTEGER DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    FOREIGN KEY (client_id) REFERENCES "Client"(user_id) ON DELETE CASCADE
-);
-
--- ============================================
 -- NOVEL EXTRA FEATURE: Time Tracking for Hourly Projects
 -- ============================================
 
@@ -413,39 +288,6 @@ CREATE TABLE IF NOT EXISTS "TimeEntry" (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
     FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE
-);
-
--- ============================================
--- NOVEL EXTRA FEATURE: Reputation Decay (Freshness Weighting)
--- ============================================
-
-CREATE TABLE IF NOT EXISTS "ReputationSnapshot" (
-    snapshot_id SERIAL PRIMARY KEY,
-    freelancer_id INTEGER NOT NULL,
-    snapshot_date DATE NOT NULL,
-    rating DECIMAL(3,2) NOT NULL,
-    total_orders INTEGER NOT NULL,
-    total_revenue DECIMAL(10,2) NOT NULL,
-    dispute_rate DECIMAL(5,2) DEFAULT 0,
-    weight DECIMAL(3,2) DEFAULT 1.0,
-    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE,
-    UNIQUE (freelancer_id, snapshot_date)
-);
-
--- ============================================
--- NOVEL EXTRA FEATURE: Milestone Voting (Multi-stakeholder Approval)
--- ============================================
-
-CREATE TABLE IF NOT EXISTS "MilestoneApprover" (
-    approver_id SERIAL PRIMARY KEY,
-    deliverable_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('client', 'stakeholder', 'admin')),
-    vote TEXT CHECK (vote IN ('approve', 'reject', 'pending')),
-    comments TEXT,
-    voted_at TIMESTAMPTZ,
-    FOREIGN KEY (deliverable_id) REFERENCES "Deliverable"(deliverable_id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES "User"(user_id) ON DELETE CASCADE
 );
 
 -- ============================================

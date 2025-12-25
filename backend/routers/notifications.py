@@ -19,7 +19,7 @@ async def create_notification(
         async with conn.cursor() as cur:
             try:
                 await cur.execute(
-                    'INSERT INTO "Notification" (user_id, type, message, date_sent, is_read) VALUES (%s, %s, %s, NOW(), FALSE) RETURNING notification_id, date_sent',
+                    'INSERT INTO "Notification" (user_id, type, message, created_at, is_read) VALUES (%s, %s, %s, NOW(), FALSE) RETURNING notification_id, created_at',
                     (user_id, notification_type, message),
                 )
                 row = await cur.fetchone()
@@ -29,7 +29,7 @@ async def create_notification(
                     user_id=user_id,
                     type=notification_type,
                     message=message,
-                    date_sent=row[1],
+                    created_at=row[1],
                     is_read=False,
                 )
             except Exception as e:
@@ -43,7 +43,7 @@ async def list_notifications(user_id: int = Query(...)):
     async with get_connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                'SELECT notification_id, user_id, type, message, date_sent, is_read FROM "Notification" WHERE user_id = %s ORDER BY date_sent DESC',
+                'SELECT notification_id, user_id, type, message, created_at, is_read FROM "Notification" WHERE user_id = %s ORDER BY created_at DESC',
                 (user_id,),
             )
             rows = await cur.fetchall()
@@ -53,7 +53,7 @@ async def list_notifications(user_id: int = Query(...)):
                     user_id=row[1],
                     type=row[2],
                     message=row[3],
-                    date_sent=row[4],
+                    created_at=row[4],
                     is_read=row[5],
                 )
                 for row in rows

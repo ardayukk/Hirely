@@ -70,6 +70,7 @@ export default function Checkout() {
         delivery_date: normalizedDelivery,
         milestone_count: orderType === 'big' ? normalizedMilestones : null,
         requirements: requirementsText ? { description: requirementsText } : null,
+        addon_service_ids: selectedAddons || [],
       };
 
       const res = await axiosInstance.post(`/api/orders?client_id=${user.id}`, payload);

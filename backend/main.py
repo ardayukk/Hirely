@@ -25,6 +25,13 @@ from backend.routers import (
     satisfaction,
     pricing_analytics,
     notifications,
+    deliverables,
+    workdone,
+    favorites,
+    portfolio,
+    availability,
+    warranty,
+    pricing_history,
 )
 
 # Hirely API
@@ -73,6 +80,13 @@ app.include_router(earnings.router, prefix="/api")
 app.include_router(satisfaction.router)
 app.include_router(pricing_analytics.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
+app.include_router(deliverables.router, prefix="/api")
+app.include_router(workdone.router, prefix="/api")
+app.include_router(favorites.router, prefix="/api")
+app.include_router(portfolio.router, prefix="/api")
+app.include_router(availability.router, prefix="/api")
+app.include_router(warranty.router, prefix="/api")
+app.include_router(pricing_history.router, prefix="/api")
 
 @app.get("/")
 def root():

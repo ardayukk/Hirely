@@ -7,5 +7,5 @@ class NotificationPublic(BaseModel):
     user_id: int
     type: str
     message: str
-    date_sent: datetime
+    created_at: datetime
     is_read: bool
