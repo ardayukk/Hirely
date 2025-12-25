@@ -9,6 +9,7 @@ export default function Portfolio() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [freelancer, setFreelancer] = useState(null);
+  const [imageErrors, setImageErrors] = useState({});
 
   useEffect(() => {
     loadPortfolio();
@@ -18,19 +19,25 @@ export default function Portfolio() {
     try {
       setLoading(true);
       setError('');
-      // Fetch freelancer info
-      const userRes = await axiosInstance.get(`/api/users/${freelancerId}`);
-      setFreelancer(userRes.data);
       
-      // Fetch portfolio items
+      // Fetch portfolio items (this will include freelancer info via the endpoint)
       const portfolioRes = await axiosInstance.get(`/api/portfolio/${freelancerId}`);
       setPortfolio(portfolioRes.data || []);
+      
+      // Set freelancer info if available from portfolio context
+      if (portfolioRes.data?.length > 0) {
+        setFreelancer({ name: 'Freelancer', id: freelancerId });
+      }
     } catch (err) {
       console.error('Failed to load portfolio', err);
       setError(err.response?.data?.detail || 'Failed to load portfolio');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleImageError = (portfolioId) => {
+    setImageErrors(prev => ({ ...prev, [portfolioId]: true }));
   };
 
   if (loading) {
@@ -44,13 +51,8 @@ export default function Portfolio() {
   return (
     <Container sx={{ mt: 4, mb: 4 }}>
       <Typography variant="h4" gutterBottom>
-        {freelancer?.name || 'Freelancer'}'s Portfolio
+        Freelancer Portfolio
       </Typography>
-      {freelancer?.tagline && (
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          {freelancer.tagline}
-        </Typography>
-      )}
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
@@ -61,14 +63,20 @@ export default function Portfolio() {
           {portfolio.map((item) => (
             <Grid item xs={12} md={6} lg={4} key={item.portfolio_id}>
               <Card>
-                {item.image_url && (
+                {item.image_url && !imageErrors[item.portfolio_id] && (
                   <CardMedia
                     component="img"
                     height="200"
                     image={item.image_url}
                     alt={item.title}
+                    onError={() => handleImageError(item.portfolio_id)}
                     sx={{ objectFit: 'cover' }}
                   />
+                )}
+                {!item.image_url || imageErrors[item.portfolio_id] && (
+                  <Box sx={{ height: 200, backgroundColor: '#e0e0e0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Typography color="textSecondary">No image</Typography>
+                  </Box>
                 )}
                 <CardContent>
                   <Typography variant="h6" gutterBottom>

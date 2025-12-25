@@ -31,6 +31,7 @@ import Availability from '../pages/Availability';
 import Warranty from '../pages/Warranty';
 import PricingHistory from '../pages/PricingHistory';
 import ServiceVersions from '../pages/ServiceVersions';
+import MyPortfolio from '../pages/MyPortfolio';
 import { ThemeModeContext } from './main';
 
 function AppContent() {
@@ -77,6 +78,7 @@ function AppContent() {
                             <Button component={Link} to="/notifications">Notifications</Button>
                             <Button component={Link} to="/services" variant="text">Services</Button>
                             {user?.role === 'client' && <Button component={Link} to="/favorites">Favorites</Button>}
+                            {user?.role === 'freelancer' && <Button component={Link} to="/my-portfolio">My Portfolio</Button>}
                             <Button component={Link} to="/profile">Profile</Button>
                             <Button onClick={handleLogout}>Logout</Button>
                             <ThemeToggle />
@@ -110,6 +112,7 @@ function AppContent() {
                 <Route path="/myServices" element={requireAuth(<MyServices />)} />
                 <Route path="/favorites" element={requireAuth(<Favorites />)} />
                 <Route path="/portfolio/:freelancerId" element={requireAuth(<Portfolio />)} />
+                <Route path="/my-portfolio" element={requireAuth(<MyPortfolio />)} />
                 <Route path="/availability/:freelancerId" element={requireAuth(<Availability />)} />
                 <Route path="/warranty/:orderId" element={requireAuth(<Warranty />)} />
                 <Route path="/pricing-history/:serviceId" element={requireAuth(<PricingHistory />)} />

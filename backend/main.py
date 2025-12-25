@@ -29,6 +29,7 @@ from backend.routers import (
     workdone,
     favorites,
     portfolio,
+    my_portfolio,
     availability,
     warranty,
     pricing_history,
@@ -86,6 +87,7 @@ app.include_router(deliverables.router, prefix="/api")
 app.include_router(workdone.router, prefix="/api")
 app.include_router(favorites.router, prefix="/api")
 app.include_router(portfolio.router, prefix="/api")
+app.include_router(my_portfolio.router, prefix="/api")
 app.include_router(availability.router, prefix="/api")
 app.include_router(warranty.router, prefix="/api")
 app.include_router(pricing_history.router, prefix="/api")
