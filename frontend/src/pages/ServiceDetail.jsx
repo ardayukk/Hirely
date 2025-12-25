@@ -24,6 +24,7 @@ export default function ServiceDetail() {
   const [service, setService] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedAddons, setSelectedAddons] = useState([]);
+  const [isFavorited, setIsFavorited] = useState(false);
 
   useEffect(() => {
     const fetchServiceDetail = async () => {
@@ -36,6 +37,17 @@ export default function ServiceDetail() {
           setSelectedAddons((prev) => prev.filter((id) => res.data.addons.some((a) => a.addon_id === id)));
         } else {
           setSelectedAddons([]);
+        }
+        
+        // Check if service is favorited
+        if (user?.id) {
+          try {
+            const favRes = await axiosInstance.get(`/api/favorites?client_id=${user.id}`);
+            const isFav = favRes.data.some((fav) => fav.service_id === parseInt(serviceId));
+            setIsFavorited(isFav);
+          } catch (err) {
+            console.error("Failed to check favorite status", err);
+          }
         }
       } catch (err) {
         console.error("Failed to load service details", err);
@@ -192,7 +204,7 @@ export default function ServiceDetail() {
                 </Avatar>
                 <Box>
                   <Typography variant="body1" sx={{ fontWeight: "bold", color: colors.color1 }}>
-                    Freelancer ID: {service.freelancer.user_id}
+                    {service.freelancer.first_name} {service.freelancer.last_name}
                   </Typography>
                   <Typography variant="body2" sx={{ color: colors.color3 }}>
                     {service.freelancer.tagline || "No tagline"}
@@ -361,21 +373,31 @@ export default function ServiceDetail() {
                   sx={{
                     py: 1.5,
                     px: 3,
-                    color: colors.color1,
-                    borderColor: colors.color1,
+                    color: isFavorited ? colors.color2 : colors.color1,
+                    borderColor: isFavorited ? colors.color2 : colors.color1,
+                    backgroundColor: isFavorited ? `${colors.color2}15` : 'transparent',
                     fontWeight: "bold",
                     "&:hover": { backgroundColor: colors.color4 },
                   }}
                   onClick={async () => {
                     try {
-                      await axiosInstance.post(`/api/favorites?client_id=${user.id}`, { service_id: service.service_id });
-                      alert('Added to favorites');
+                      if (isFavorited) {
+                        // Remove from favorites
+                        await axiosInstance.delete(`/api/favorites?client_id=${user.id}&service_id=${service.service_id}`);
+                        setIsFavorited(false);
+                        alert('Removed from favorites');
+                      } else {
+                        // Add to favorites
+                        await axiosInstance.post(`/api/favorites?client_id=${user.id}`, { service_id: service.service_id });
+                        setIsFavorited(true);
+                        alert('Added to favorites');
+                      }
                     } catch (err) {
-                      alert(err.response?.data?.detail || 'Failed to add favorite');
+                      alert(err.response?.data?.detail || 'Failed to update favorite');
                     }
                   }}
                 >
-                  Favorite
+                  {isFavorited ? 'Unfavorite' : 'Favorite'}
                 </Button>
               )}
               <Button
