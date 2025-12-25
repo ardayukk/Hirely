@@ -10,6 +10,7 @@ import Admin from '../pages/AdminDisputes';
 import Checkout from '../pages/Checkout';
 import ClientWorkspace from '../pages/Client';
 import CreateService from '../pages/CreateService';
+import Earnings from '../pages/Earnings';
 import EditService from '../pages/EditService';
 import Favorites from '../pages/Favorites';
 import Home from '../pages/Home';
@@ -80,6 +81,7 @@ function AppContent() {
                             <Button component={Link} to="/services" variant="text">Services</Button>
                             {user?.role === 'client' && <Button component={Link} to="/favorites">Favorites</Button>}
                             {user?.role === 'freelancer' && <Button component={Link} to="/my-portfolio">My Portfolio</Button>}
+                            {user?.role === 'freelancer' && <Button component={Link} to="/earnings">Earnings</Button>}
                             <Button component={Link} to="/profile">Profile</Button>
                             <Button onClick={handleLogout}>Logout</Button>
                             <ThemeToggle />
@@ -114,6 +116,7 @@ function AppContent() {
                     <Route path="/favorites" element={requireAuth(<Favorites />)} />
                     <Route path="/portfolio/:freelancerId" element={requireAuth(<Portfolio />)} />
                     <Route path="/my-portfolio" element={requireAuth(<MyPortfolio />)} />
+                    <Route path="/earnings" element={requireAuth(<Earnings />)} />
                     <Route path="/warranty/:orderId" element={requireAuth(<Warranty />)} />
                     <Route path="/pricing-history/:serviceId" element={requireAuth(<PricingHistory />)} />
                     <Route path="/pricing-trends" element={requireAuth(<PricingTrends />)} />

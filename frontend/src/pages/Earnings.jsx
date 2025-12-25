@@ -86,38 +86,37 @@ export default function Earnings() {
     const [error, setError] = useState('');
 
     useEffect(() => {
-        if (!freelancerId) return;
+        if (!user) return;
         setLoading((p) => ({ ...p, summary: true }));
         axiosInstance
-            .get(`/api/earnings/summary`, { params: { freelancer_id: freelancerId } })
+            .get(`/api/earnings/summary`)
             .then((res) => {
                 setSummary(res.data);
                 setError('');
             })
             .catch((e) => setError(e.message || 'Failed to load summary'))
             .finally(() => setLoading((p) => ({ ...p, summary: false })));
-    }, [freelancerId]);
+    }, [user]);
 
     useEffect(() => {
-        if (!freelancerId) return;
+        if (!user) return;
         setLoading((p) => ({ ...p, breakdown: true }));
         axiosInstance
-            .get(`/api/earnings/by-service`, { params: { freelancer_id: freelancerId } })
+            .get(`/api/earnings/by-service`)
             .then((res) => {
                 setBreakdown(res.data || []);
                 setError('');
             })
             .catch((e) => setError(e.message || 'Failed to load breakdown'))
             .finally(() => setLoading((p) => ({ ...p, breakdown: false })));
-    }, [freelancerId]);
+    }, [user]);
 
     useEffect(() => {
-        if (!freelancerId) return;
+        if (!user) return;
         setLoading((p) => ({ ...p, series: true }));
         axiosInstance
             .get(`/api/earnings/timeseries`, {
                 params: {
-                    freelancer_id: freelancerId,
                     granularity: filters.granularity,
                     start_date: filters.start || undefined,
                     end_date: filters.end || undefined,
@@ -129,15 +128,14 @@ export default function Earnings() {
             })
             .catch((e) => setError(e.message || 'Failed to load trend'))
             .finally(() => setLoading((p) => ({ ...p, series: false })));
-    }, [freelancerId, filters.granularity, filters.start, filters.end]);
+    }, [user, filters.granularity, filters.start, filters.end]);
 
     useEffect(() => {
-        if (!freelancerId) return;
+        if (!user) return;
         setLoading((p) => ({ ...p, history: true }));
         axiosInstance
             .get(`/api/earnings/history`, {
                 params: {
-                    freelancer_id: freelancerId,
                     start_date: filters.start || undefined,
                     end_date: filters.end || undefined,
                     status: filters.status || undefined,
@@ -153,17 +151,25 @@ export default function Earnings() {
             })
             .catch((e) => setError(e.message || 'Failed to load history'))
             .finally(() => setLoading((p) => ({ ...p, history: false })));
-    }, [freelancerId, filters.start, filters.end, filters.status, filters.serviceId, page, rowsPerPage]);
+    }, [user, filters.start, filters.end, filters.status, filters.serviceId, page, rowsPerPage]);
 
     const historyRows = useMemo(() => history.map((h) => ({
         ...h,
         payment_date: new Date(h.payment_date).toLocaleDateString(),
     })), [history]);
 
-    if (!freelancerId) {
+    if (!user) {
         return (
             <Box sx={{ p: 4 }}>
                 <Typography variant="h6">Login as a freelancer to view earnings.</Typography>
+            </Box>
+        );
+    }
+
+    if (user.role !== 'freelancer') {
+        return (
+            <Box sx={{ p: 4 }}>
+                <Typography variant="h6">Earnings dashboard is only available for freelancers.</Typography>
             </Box>
         );
     }

@@ -1,9 +1,11 @@
 from decimal import Decimal
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 
 from backend.db import get_connection
+from backend.core.security import get_current_user
+from backend.schemas.user import UserResponse
 from backend.schemas.earnings import (
     EarningsSummary,
     EarningsHistoryItem,
@@ -22,36 +24,43 @@ def _to_float(value) -> float:
 
 
 @router.get("/summary", response_model=EarningsSummary)
-async def get_earnings_summary(freelancer_id: int = Query(...)):
+async def get_earnings_summary(current_user: UserResponse = Depends(get_current_user)):
+    freelancer_id = current_user.user_id
+    
     async with get_connection() as conn:
         async with conn.cursor() as cur:
+            # Check available balance (from wallet)
             await cur.execute('SELECT wallet_balance FROM "NonAdmin" WHERE user_id = %s', (freelancer_id,))
             row = await cur.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Freelancer not found")
             available_balance = _to_float(row[0])
 
+            # Check pending balance (funds in escrow for active orders)
             await cur.execute(
                 '''
-                SELECT COALESCE(SUM(p.amount), 0)
-                FROM finish_order fo
-                JOIN "Payment" p ON fo.payment_id = p.payment_id
-                JOIN "Order" o ON o.order_id = fo.order_id
-                WHERE fo.freelancer_id = %s
-                  AND p.released = FALSE
-                                    AND o.status NOT IN ('cancelled', 'completed')
+                SELECT COALESCE(SUM(o.total_price), 0)
+                FROM "Order" o
+                WHERE o.freelancer_id = %s
+                  AND o.status IN ('accepted', 'in_progress', 'delivered', 'revision_requested')
+                  AND o.total_price IS NOT NULL
                 ''',
                 (freelancer_id,),
             )
             pending_balance = _to_float((await cur.fetchone())[0])
 
+            # Calculate lifetime statistics (total earned from completed orders)
             await cur.execute(
                 '''
-                SELECT COALESCE(SUM(p.amount), 0), COUNT(*), MIN(p.payment_date), MAX(p.payment_date)
-                FROM finish_order fo
-                JOIN "Payment" p ON fo.payment_id = p.payment_id
-                WHERE fo.freelancer_id = %s
-                  AND p.released = TRUE
+                SELECT 
+                    COALESCE(SUM(o.total_price), 0) as total_earned,
+                    COUNT(*) as order_count,
+                    MIN(o.created_at) as first_order,
+                    MAX(o.created_at) as last_order
+                FROM "Order" o
+                WHERE o.freelancer_id = %s
+                  AND o.status = 'completed'
+                  AND o.total_price IS NOT NULL
                 ''',
                 (freelancer_id,),
             )
@@ -73,39 +82,37 @@ async def get_earnings_summary(freelancer_id: int = Query(...)):
 
 @router.get("/history", response_model=EarningsHistoryResponse)
 async def get_earnings_history(
-    freelancer_id: int = Query(...),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
     status: Optional[str] = Query(None),
     service_id: Optional[int] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    current_user: UserResponse = Depends(get_current_user),
 ):
-    filters = ["fo.freelancer_id = %s", "p.released = TRUE"]
+    freelancer_id = current_user.user_id
+    filters = ["o.freelancer_id = %s"]
     params: List = [freelancer_id]
 
     if start_date:
-        filters.append("p.payment_date >= %s")
+        filters.append("o.created_at >= %s")
         params.append(start_date)
     if end_date:
-        filters.append("p.payment_date <= %s")
+        filters.append("o.created_at <= %s")
         params.append(end_date)
     if status:
         filters.append("o.status = %s")
         params.append(status)
     if service_id:
-        filters.append("s.service_id = %s")
+        filters.append("o.service_id = %s")
         params.append(service_id)
 
     where_clause = " AND ".join(filters)
     offset = (page - 1) * page_size
 
     base_query = f'''
-        FROM finish_order fo
-        JOIN "Payment" p ON fo.payment_id = p.payment_id
-        JOIN "Order" o ON o.order_id = fo.order_id
-        JOIN make_order mo ON mo.order_id = o.order_id
-        JOIN "Service" s ON s.service_id = mo.service_id
+        FROM "Order" o
+        JOIN "Service" s ON s.service_id = o.service_id
         WHERE {where_clause}
     '''
 
@@ -116,9 +123,9 @@ async def get_earnings_history(
 
             await cur.execute(
                 f'''
-                SELECT p.payment_id, o.order_id, s.service_id, s.title, p.amount, p.payment_date, o.status
+                SELECT o.order_id, o.service_id, s.title, o.total_price, o.created_at, o.status
                 {base_query}
-                ORDER BY p.payment_date DESC
+                ORDER BY o.created_at DESC
                 LIMIT %s OFFSET %s
                 ''',
                 params + [page_size, offset],
@@ -127,13 +134,13 @@ async def get_earnings_history(
 
     items = [
         EarningsHistoryItem(
-            payment_id=r[0],
-            order_id=r[1],
-            service_id=r[2],
-            service_title=r[3],
-            amount=_to_float(r[4]),
-            payment_date=r[5],
-            order_status=r[6],
+            payment_id=r[0],  # Using order_id as payment_id for compatibility
+            order_id=r[0],
+            service_id=r[1],
+            service_title=r[2],
+            amount=_to_float(r[3]),
+            payment_date=r[4],  # Using created_at as payment_date
+            order_status=r[5],
         )
         for r in rows
     ]
@@ -142,21 +149,21 @@ async def get_earnings_history(
 
 
 @router.get("/by-service", response_model=List[ServiceBreakdownItem])
-async def get_earnings_by_service(freelancer_id: int = Query(...)):
+async def get_earnings_by_service(current_user: UserResponse = Depends(get_current_user)):
+    freelancer_id = current_user.user_id
+    
     async with get_connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
                 '''
-                SELECT s.service_id, s.title, COUNT(*), COALESCE(SUM(p.amount), 0)
-                FROM finish_order fo
-                JOIN "Payment" p ON fo.payment_id = p.payment_id
-                JOIN "Order" o ON o.order_id = fo.order_id
-                JOIN make_order mo ON mo.order_id = o.order_id
-                JOIN "Service" s ON s.service_id = mo.service_id
-                WHERE fo.freelancer_id = %s
-                  AND p.released = TRUE
+                SELECT s.service_id, s.title, 
+                       COUNT(CASE WHEN o.status IN ('completed', 'delivered') THEN 1 END), 
+                       COALESCE(SUM(CASE WHEN o.status IN ('completed', 'delivered') THEN o.total_price ELSE 0 END), 0)
+                FROM "Service" s
+                LEFT JOIN "Order" o ON s.service_id = o.service_id
+                WHERE s.freelancer_id = %s
                 GROUP BY s.service_id, s.title
-                ORDER BY COALESCE(SUM(p.amount), 0) DESC
+                ORDER BY COALESCE(SUM(CASE WHEN o.status IN ('completed', 'delivered') THEN o.total_price ELSE 0 END), 0) DESC
                 ''',
                 (freelancer_id,),
             )
@@ -181,31 +188,31 @@ async def get_earnings_by_service(freelancer_id: int = Query(...)):
 
 @router.get("/timeseries", response_model=List[EarningsPoint])
 async def get_earnings_timeseries(
-    freelancer_id: int = Query(...),
     granularity: str = Query("month", regex="^(day|week|month)$"),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
+    current_user: UserResponse = Depends(get_current_user),
 ):
     # Map granularity to date_trunc
     trunc_unit = granularity
+    freelancer_id = current_user.user_id
 
-    filters = ["fo.freelancer_id = %s", "p.released = TRUE"]
+    filters = ["s.freelancer_id = %s", "o.status IN ('completed', 'delivered')"]
     params: List = [freelancer_id]
 
     if start_date:
-        filters.append("p.payment_date >= %s")
+        filters.append("o.created_at >= %s")
         params.append(start_date)
     if end_date:
-        filters.append("p.payment_date <= %s")
+        filters.append("o.created_at <= %s")
         params.append(end_date)
 
     where_clause = " AND ".join(filters)
 
     query = f'''
-        SELECT date_trunc(%s, p.payment_date) AS period, COALESCE(SUM(p.amount), 0)
-        FROM finish_order fo
-        JOIN "Payment" p ON fo.payment_id = p.payment_id
-        JOIN "Order" o ON o.order_id = fo.order_id
+        SELECT date_trunc(%s, o.created_at) AS period, COALESCE(SUM(o.total_price), 0)
+        FROM "Order" o
+        JOIN "Service" s ON o.service_id = s.service_id
         WHERE {where_clause}
         GROUP BY period
         ORDER BY period
