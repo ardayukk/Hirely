@@ -70,18 +70,7 @@ CREATE TABLE IF NOT EXISTS "SampleWork" (
     FOREIGN KEY (service_id) REFERENCES "Service"(service_id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS "Review" (
-    review_id SERIAL PRIMARY KEY,
-    order_id INTEGER NOT NULL,
-    client_id INTEGER NOT NULL,
-    freelancer_id INTEGER NOT NULL,
-    rating INTEGER CHECK (rating BETWEEN 1 AND 5),
-    comment TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
-    FOREIGN KEY (client_id) REFERENCES "Client"(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE
-);
+
 
 -- ============================================
 -- PAYMENTS & ORDERS
@@ -112,6 +101,19 @@ CREATE TABLE IF NOT EXISTS "Order" (
     FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE,
     FOREIGN KEY (service_id) REFERENCES "Service"(service_id) ON DELETE CASCADE,
     FOREIGN KEY (payment_id) REFERENCES "Payment"(payment_id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS "Review" (
+    review_id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    client_id INTEGER NOT NULL,
+    freelancer_id INTEGER NOT NULL,
+    rating INTEGER CHECK (rating BETWEEN 1 AND 5),
+    comment TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE,
+    FOREIGN KEY (client_id) REFERENCES "Client"(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE
 );
 
 -- ============================================
