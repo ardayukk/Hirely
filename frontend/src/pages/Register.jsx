@@ -14,6 +14,7 @@ export default function Register() {
   const [err, setErr] = useState('');
   const [bubbles, setBubbles] = useState([]);
   const bubbleRefs = useRef([]);
+  const bubbleDomRefs = useRef([]);
 
   // Initialize random bubbles with varied sizes and full-screen dispersion
   useEffect(() => {
@@ -41,8 +42,8 @@ export default function Register() {
   useEffect(() => {
     let animationFrame;
     const animate = () => {
-      bubbleRefs.current = bubbleRefs.current.map(b => {
-        if (b.popped) return b;
+      bubbleRefs.current.forEach((b, i) => {
+        if (b.popped) return;
 
         let newX = b.x + b.dx;
         let newY = b.y + b.dy;
@@ -52,10 +53,14 @@ export default function Register() {
         if (newY < -b.size) newY = window.innerHeight;
         if (newY > window.innerHeight) newY = -b.size;
 
-        return { ...b, x: newX, y: newY };
+        b.x = newX;
+        b.y = newY;
+
+        if (bubbleDomRefs.current[i]) {
+          bubbleDomRefs.current[i].style.transform = `translate3d(${newX}px, ${newY}px, 0) scale(${b.scale})`;
+        }
       });
 
-      setBubbles([...bubbleRefs.current]);
       animationFrame = requestAnimationFrame(animate);
     };
 
@@ -120,6 +125,7 @@ export default function Register() {
         {bubbles.map((b, i) => (
           <Box
             key={i}
+            ref={el => bubbleDomRefs.current[i] = el}
             onClick={() => popBubble(i)}
             sx={{
               position: 'absolute',

@@ -42,8 +42,8 @@ async def register(user: UserCreate):
             try:
                 # 1. Insert into User
                 await cur.execute(
-                    'INSERT INTO "User" (email, password) VALUES (%s, %s) RETURNING user_id',
-                    (user.email, hashed)
+                    'INSERT INTO "User" (email, password, role) VALUES (%s, %s, %s) RETURNING user_id',
+                    (user.email, hashed, user.role)
                 )
                 user_id = await cur.fetchone()
                 if not user_id:
@@ -52,8 +52,8 @@ async def register(user: UserCreate):
 
                 # 2. Insert into NonAdmin
                 await cur.execute(
-                    'INSERT INTO "NonAdmin" (user_id, name, biography, wallet_balance) VALUES (%s, %s, %s, %s)',
-                    (user_id, user.username, "", 0.00)
+                    'INSERT INTO "NonAdmin" (user_id, name, wallet_balance) VALUES (%s, %s, %s)',
+                    (user_id, user.username, 0.00)
                 )
 
                 # 3. Insert into Client (assuming role is always 'client' for now)
@@ -79,6 +79,7 @@ async def register(user: UserCreate):
                 )
 
             except Exception as e:
+                print(f"Registration error: {e}")
                 await conn.rollback()
                 if "unique" in str(e).lower() or "already exists" in str(e).lower():
                     raise HTTPException(
@@ -87,7 +88,7 @@ async def register(user: UserCreate):
                     )
                 raise HTTPException(
                     status_code=400,
-                    detail="Registration failed. Please check your input and try again."
+                    detail=f"Registration failed: {str(e)}"
                 )
 
 
