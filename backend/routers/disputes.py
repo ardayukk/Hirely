@@ -10,10 +10,9 @@ router = APIRouter(prefix="/disputes", tags=["disputes"])
 async def _get_order_parties(cur, order_id: int):
     await cur.execute(
         '''
-        SELECT mo.client_id, fo.freelancer_id
-        FROM make_order mo
-        JOIN finish_order fo ON mo.order_id = fo.order_id
-        WHERE mo.order_id = %s
+        SELECT o.client_id, o.freelancer_id
+        FROM "Order" o
+        WHERE o.order_id = %s
         ''',
         (order_id,),
     )
@@ -33,19 +32,14 @@ async def open_dispute(payload: DisputeCreate, client_id: int = Query(...)):
                     raise HTTPException(status_code=403, detail="Order does not belong to client")
 
                 await cur.execute(
-                    'INSERT INTO "Dispute" (decision, description, status, opened_at) VALUES (NULL, %s, %s, NOW()) RETURNING dispute_id',
-                    (payload.reason, 'OPEN'),
+                    'INSERT INTO "Dispute" (order_id, client_id, description, status) VALUES (%s, %s, %s, %s) RETURNING dispute_id',
+                    (payload.order_id, client_id, payload.reason, 'OPEN'),
                 )
                 dispute_id = (await cur.fetchone())[0]
 
                 await cur.execute(
                     'INSERT INTO reported (dispute_id, client_id, admin_id, order_id) VALUES (%s, %s, NULL, %s)',
                     (dispute_id, client_id, payload.order_id),
-                )
-
-                await cur.execute(
-                    'UPDATE "Order" SET status = %s WHERE order_id = %s',
-                    ('disputed', payload.order_id),
                 )
 
                 await conn.commit()

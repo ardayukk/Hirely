@@ -522,6 +522,24 @@ export default function OrderDetail() {
                 )}
                 {messages.map((m) => {
                   const fromMe = m.sender_id === user.id;
+                  
+                  // Parse message content - handle JSON-encoded file messages
+                  let displayText = m.message_text;
+                  let fileInfo = null;
+                  try {
+                    const parsed = JSON.parse(m.message_text);
+                    if (parsed.type === 'file') {
+                      displayText = parsed.text;
+                      fileInfo = {
+                        file_name: parsed.file_name,
+                        file_path: parsed.file_path,
+                        file_type: parsed.file_type,
+                      };
+                    }
+                  } catch (e) {
+                    // Not JSON, treat as plain text
+                  }
+                  
                   return (
                     <Box
                       key={m.message_id}
@@ -538,13 +556,18 @@ export default function OrderDetail() {
                       <Typography variant="caption" sx={{ opacity: 0.8 }}>
                         {fromMe ? 'You' : m.sender_name || `User ${m.sender_id}`}
                       </Typography>
-                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{m.message_text}</Typography>
-                      {m.file_id && m.file_name && (
+                      {displayText && <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{displayText}</Typography>}
+                      {fileInfo && (
+                        <Typography variant="body2" sx={{ mt: 0.5 }}>
+                          📎 <a href={fileInfo.file_path} target="_blank" rel="noopener noreferrer" download style={{ color: fromMe ? '#fff' : 'inherit' }}>{fileInfo.file_name}</a>
+                        </Typography>
+                      )}
+                      {m.file_id && m.file_name && !fileInfo && (
                         <Typography variant="body2" sx={{ mt: 0.5 }}>
                           {(() => {
                             const fileUrl = `${axiosInstance.defaults.baseURL}/api/messages/files/${m.file_id}`;
                             return (
-                              <>Attachment: <a href={fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: fromMe ? '#fff' : undefined }}>{m.file_name}</a></>
+                              <>📎 <a href={fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: fromMe ? '#fff' : undefined }}>{m.file_name}</a></>
                             );
                           })()}
                         </Typography>

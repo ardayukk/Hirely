@@ -87,10 +87,9 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 async def _get_pair_by_order(cur, order_id: int):
     await cur.execute(
         '''
-        SELECT mo.client_id, fo.freelancer_id
-        FROM make_order mo
-        JOIN finish_order fo ON mo.order_id = fo.order_id
-        WHERE mo.order_id = %s
+        SELECT o.client_id, o.freelancer_id
+        FROM "Order" o
+        WHERE o.order_id = %s
         ''',
         (order_id,),
     )
@@ -126,40 +125,20 @@ async def send_message(payload: MessageCreate, sender_id: int = Query(...)):
 
                 await cur.execute(
                     '''
-                    INSERT INTO "Messages" (sender_id, receiver_id, order_id, reply_to_id, message_text, timestamp, is_read)
-                    VALUES (%s, %s, %s, %s, %s, NOW(), FALSE)
-                    RETURNING message_id, timestamp
+                    INSERT INTO "Messages" (sender_id, receiver_id, order_id, message_text, is_read)
+                    VALUES (%s, %s, %s, %s, FALSE)
+                    RETURNING message_id, created_at
                     ''',
-                    (sender_id, receiver_id, payload.order_id, payload.reply_to_id, payload.message_text),
+                    (sender_id, receiver_id, payload.order_id, payload.message_text),
                 )
                 message_row = await cur.fetchone()
                 message_id, ts = message_row[0], message_row[1]
 
-                await cur.execute(
-                    'INSERT INTO "Send_Message" (client_id, freelancer_id, message_id) VALUES (%s, %s, %s)',
-                    (client_id, freelancer_id, message_id),
-                )
-                await cur.execute(
-                    'INSERT INTO "Receive_Message" (client_id, freelancer_id, message_id) VALUES (%s, %s, %s)',
-                    (client_id, freelancer_id, message_id),
-                )
-
-                file_id = None
-                file_name = payload.file_name
-                file_path = payload.file_path
-                file_type = payload.file_type
-                if file_name and file_path:
-                    await cur.execute(
-                        'INSERT INTO "File" (message_id, file_name, file_path, upload_date, file_type) VALUES (%s, %s, %s, NOW(), %s) RETURNING file_id',
-                        (message_id, file_name, file_path, file_type),
-                    )
-                    file_id = (await cur.fetchone())[0]
-
                 # Insert notification for receiver
                 await cur.execute(
                     '''
-                    INSERT INTO "Notification" (user_id, type, message, date_sent, is_read)
-                    VALUES (%s, %s, %s, NOW(), FALSE)
+                    INSERT INTO "Notification" (user_id, type, message, is_read)
+                    VALUES (%s, %s, %s, FALSE)
                     ''',
                     (receiver_id, 'new_message', f'New message in order #{payload.order_id}'),
                 )
@@ -176,11 +155,6 @@ async def send_message(payload: MessageCreate, sender_id: int = Query(...)):
                         "message_text": payload.message_text,
                         "timestamp": ts.isoformat(),
                         "is_read": False,
-                        "reply_to_id": payload.reply_to_id,
-                        "file_id": file_id,
-                        "file_name": file_name,
-                        "file_path": file_path,
-                        "file_type": file_type,
                     }
                 })
 
@@ -191,11 +165,11 @@ async def send_message(payload: MessageCreate, sender_id: int = Query(...)):
                     message_text=payload.message_text,
                     timestamp=ts,
                     is_read=False,
-                    reply_to_id=payload.reply_to_id,
-                    file_id=file_id,
-                    file_name=file_name,
-                    file_path=file_path,
-                    file_type=file_type,
+                    reply_to_id=None,
+                    file_id=None,
+                    file_name=None,
+                    file_path=None,
+                    file_type=None,
                 )
             except HTTPException:
                 await conn.rollback()
@@ -376,38 +350,33 @@ async def upload_file(
         async with conn.cursor() as cur:
             try:
                 receiver_id = freelancer_id if sender_id == client_id else client_id
-                text = (message_text or "").strip() or "Attachment"
+                
+                # Create a message with file info encoded as JSON
+                import json as json_lib
+                message_content = {
+                    "type": "file",
+                    "text": (message_text or "").strip() or "Attachment",
+                    "file_name": file.filename,
+                    "file_path": relative_path,
+                    "file_type": file.content_type,
+                }
+                text = json_lib.dumps(message_content)
 
                 await cur.execute(
                     '''
-                    INSERT INTO "Messages" (sender_id, receiver_id, order_id, reply_to_id, message_text, timestamp, is_read)
-                    VALUES (%s, %s, %s, %s, %s, NOW(), FALSE)
-                    RETURNING message_id, timestamp
+                    INSERT INTO "Messages" (sender_id, receiver_id, order_id, message_text, is_read)
+                    VALUES (%s, %s, %s, %s, FALSE)
+                    RETURNING message_id, created_at
                     ''',
-                    (sender_id, receiver_id, order_id, reply_to_id, text),
+                    (sender_id, receiver_id, order_id, text),
                 )
                 message_row = await cur.fetchone()
                 message_id, ts = message_row[0], message_row[1]
 
                 await cur.execute(
-                    'INSERT INTO "Send_Message" (client_id, freelancer_id, message_id) VALUES (%s, %s, %s)',
-                    (client_id, freelancer_id, message_id),
-                )
-                await cur.execute(
-                    'INSERT INTO "Receive_Message" (client_id, freelancer_id, message_id) VALUES (%s, %s, %s)',
-                    (client_id, freelancer_id, message_id),
-                )
-
-                await cur.execute(
-                    'INSERT INTO "File" (message_id, file_name, file_path, upload_date, file_type) VALUES (%s, %s, %s, NOW(), %s) RETURNING file_id',
-                    (message_id, file.filename, relative_path, file.content_type),
-                )
-                file_id = (await cur.fetchone())[0]
-
-                await cur.execute(
                     '''
-                    INSERT INTO "Notification" (user_id, type, message, date_sent, is_read)
-                    VALUES (%s, %s, %s, NOW(), FALSE)
+                    INSERT INTO "Notification" (user_id, type, message, is_read)
+                    VALUES (%s, %s, %s, FALSE)
                     ''',
                     (receiver_id, 'new_message', f'New message in order #{order_id}'),
                 )
@@ -423,17 +392,11 @@ async def upload_file(
                         "message_text": text,
                         "timestamp": ts.isoformat(),
                         "is_read": False,
-                        "reply_to_id": reply_to_id,
-                        "file_id": file_id,
-                        "file_name": file.filename,
-                        "file_path": relative_path,
-                        "file_type": file.content_type,
                     }
                 })
 
                 return {
                     "message_id": message_id,
-                    "file_id": file_id,
                     "file_name": file.filename,
                     "file_path": relative_path,
                     "file_type": file.content_type,
@@ -514,16 +477,16 @@ async def get_threads(user_id: int = Query(...)):
             await cur.execute(
                 '''
                 WITH conv AS (
-                    SELECT sm.client_id, sm.freelancer_id, m.order_id, m.message_id, m.sender_id, m.receiver_id, m.message_text, m.timestamp, m.is_read
+                    SELECT o.client_id, o.freelancer_id, m.order_id, m.message_id, m.sender_id, m.receiver_id, m.message_text, m.created_at, m.is_read
                     FROM "Messages" m
-                    JOIN "Send_Message" sm ON sm.message_id = m.message_id
+                    JOIN "Order" o ON m.order_id = o.order_id
                     WHERE %s IN (m.sender_id, m.receiver_id)
                 ),
                 last_msg AS (
-                    SELECT DISTINCT ON (order_id) client_id, freelancer_id, order_id, message_text, timestamp, sender_id, receiver_id
+                    SELECT DISTINCT ON (order_id) client_id, freelancer_id, order_id, message_text, created_at, sender_id, receiver_id
                     FROM conv
                     WHERE order_id IS NOT NULL
-                    ORDER BY order_id, timestamp DESC
+                    ORDER BY order_id, created_at DESC
                 ),
                 unread AS (
                     SELECT order_id, COUNT(*) AS unread_count
@@ -535,7 +498,7 @@ async def get_threads(user_id: int = Query(...)):
                        CASE WHEN %s = lm.sender_id THEN lm.receiver_id ELSE lm.sender_id END AS other_user_id,
                        na.name AS other_user_name,
                        lm.message_text AS last_message,
-                       lm.timestamp AS last_message_at,
+                       lm.created_at AS last_message_at,
                        COALESCE(u.unread_count, 0) AS unread_count,
                        lm.order_id
                 FROM last_msg lm
@@ -557,8 +520,6 @@ async def get_threads(user_id: int = Query(...)):
                         other_user_name=row[3],
                         last_message=row[4],
                         last_message_at=row[5],
-                        unread_count=row[6],
-                        order_id=row[7],
                     )
                 )
             return threads
