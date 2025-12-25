@@ -489,3 +489,78 @@ CREATE INDEX IF NOT EXISTS idx_order_freelancer ON "Order"(freelancer_id);
 CREATE INDEX IF NOT EXISTS idx_messages_order ON "Messages"(order_id);
 CREATE INDEX IF NOT EXISTS idx_notification_user ON "Notification"(user_id);
 CREATE INDEX IF NOT EXISTS idx_dispute_order ON "Dispute"(order_id);
+
+-- ============================================
+-- TRIGGERS & FUNCTIONS
+-- ============================================
+
+-- Function to update freelancer stats (avg_rating, total_reviews)
+CREATE OR REPLACE FUNCTION update_freelancer_stats_func() RETURNS TRIGGER AS $$
+DECLARE
+    target_freelancer_id INTEGER;
+BEGIN
+    target_freelancer_id := COALESCE(NEW.freelancer_id, OLD.freelancer_id);
+    
+    UPDATE "Freelancer"
+    SET avg_rating = (SELECT COALESCE(AVG(rating), 0) FROM "Review" WHERE freelancer_id = target_freelancer_id),
+        total_reviews = (SELECT COUNT(*) FROM "Review" WHERE freelancer_id = target_freelancer_id)
+    WHERE user_id = target_freelancer_id;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to call update_freelancer_stats_func
+DROP TRIGGER IF EXISTS trg_update_freelancer_stats ON "Review";
+CREATE TRIGGER trg_update_freelancer_stats
+AFTER INSERT OR UPDATE OR DELETE ON "Review"
+FOR EACH ROW EXECUTE FUNCTION update_freelancer_stats_func();
+
+-- Function to update service stats (average_rating)
+CREATE OR REPLACE FUNCTION update_service_stats_func() RETURNS TRIGGER AS $$
+DECLARE
+    target_service_id INTEGER;
+    target_order_id INTEGER;
+BEGIN
+    target_order_id := COALESCE(NEW.order_id, OLD.order_id);
+    
+    -- Get service_id from the order
+    SELECT service_id INTO target_service_id FROM "Order" WHERE order_id = target_order_id;
+    
+    IF target_service_id IS NOT NULL THEN
+        UPDATE "Service"
+        SET average_rating = (
+            SELECT COALESCE(AVG(r.rating), 0)
+            FROM "Review" r
+            JOIN "Order" o ON r.order_id = o.order_id
+            WHERE o.service_id = target_service_id
+        )
+        WHERE service_id = target_service_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to call update_service_stats_func
+DROP TRIGGER IF EXISTS trg_update_service_stats ON "Review";
+CREATE TRIGGER trg_update_service_stats
+AFTER INSERT OR UPDATE OR DELETE ON "Review"
+FOR EACH ROW EXECUTE FUNCTION update_service_stats_func();
+
+-- Function to update freelancer total orders
+CREATE OR REPLACE FUNCTION update_freelancer_orders_func() RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.status = 'completed' AND (OLD.status IS NULL OR OLD.status != 'completed') THEN
+        UPDATE "Freelancer"
+        SET total_orders = (SELECT COUNT(*) FROM "Order" WHERE freelancer_id = NEW.freelancer_id AND status = 'completed')
+        WHERE user_id = NEW.freelancer_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to call update_freelancer_orders_func
+DROP TRIGGER IF EXISTS trg_update_freelancer_orders ON "Order";
+CREATE TRIGGER trg_update_freelancer_orders
+AFTER UPDATE OF status ON "Order"
+FOR EACH ROW EXECUTE FUNCTION update_freelancer_orders_func();
