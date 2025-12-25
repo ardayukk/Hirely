@@ -323,7 +323,7 @@ async def accept_order(order_id: int, freelancer_id: int = Query(...)):
 
 @router.patch("/{order_id}/deliver")
 async def deliver_order(order_id: int, freelancer_id: int = Query(...)):
-    """Freelancer marks order as delivered"""
+    """Freelancer marks order as delivered (or advances milestone for big orders)"""
     async with get_connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
@@ -333,12 +333,40 @@ async def deliver_order(order_id: int, freelancer_id: int = Query(...)):
             if not await cur.fetchone():
                 raise HTTPException(status_code=403, detail="Order does not belong to freelancer")
 
+            # Check if this is a big order
             await cur.execute(
-                'UPDATE "Order" SET status = %s WHERE order_id = %s',
-                ("delivered", order_id),
+                'SELECT milestone_count, current_phase FROM "BigOrder" WHERE order_id = %s',
+                (order_id,),
             )
+            big_order = await cur.fetchone()
+            
+            if big_order:
+                # Big order: check if all milestones are complete
+                milestone_count, current_phase = big_order
+                if current_phase >= milestone_count:
+                    # All milestones done, mark as delivered
+                    await cur.execute(
+                        'UPDATE "Order" SET status = %s WHERE order_id = %s',
+                        ("delivered", order_id),
+                    )
+                    message = "All milestones complete - order delivered"
+                else:
+                    # Still have milestones remaining, increment phase
+                    await cur.execute(
+                        'UPDATE "BigOrder" SET current_phase = current_phase + 1 WHERE order_id = %s',
+                        (order_id,),
+                    )
+                    message = f"Milestone {current_phase} submitted. Phase {current_phase + 1}/{milestone_count} started."
+            else:
+                # Small order: mark as delivered
+                await cur.execute(
+                    'UPDATE "Order" SET status = %s WHERE order_id = %s',
+                    ("delivered", order_id),
+                )
+                message = "Order delivered"
+            
             await conn.commit()
-            return {"message": "Order delivered"}
+            return {"message": message}
 
 
 @router.post("/{order_id}/work/upload", status_code=201)
@@ -366,6 +394,18 @@ async def upload_work(
             if status not in ("in_progress", "revision_requested"):
                 raise HTTPException(status_code=400, detail="Order status does not allow work upload")
 
+    # Get current phase for big orders
+    phase_number = None
+    async with get_connection() as conn2:
+        async with conn2.cursor() as cur2:
+            await cur2.execute(
+                'SELECT current_phase FROM "BigOrder" WHERE order_id = %s',
+                (order_id,),
+            )
+            big_order = await cur2.fetchone()
+            if big_order:
+                phase_number = big_order[0]
+    
     # Validate file
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
