@@ -34,6 +34,8 @@ export default function OrderDetail() {
   const [revisionError, setRevisionError] = useState('');
   const [workFiles, setWorkFiles] = useState([]);
   const [loadingWorkFiles, setLoadingWorkFiles] = useState(false);
+  const [revisions, setRevisions] = useState([]);
+  const [loadingRevisions, setLoadingRevisions] = useState(false);
 
   useEffect(() => {
     fetchOrder();
@@ -61,9 +63,13 @@ export default function OrderDetail() {
       } else {
         setDeliverables([]);
       }
-      // Load work files for delivered orders
-      if (res.data?.status === 'delivered' || res.data?.status === 'completed') {
+      // Load work files for orders with deliverables
+      if (res.data?.status === 'delivered' || res.data?.status === 'completed' || res.data?.status === 'revision_requested') {
         await loadWorkFiles();
+      }
+      // Load revision requests for revision_requested orders
+      if (res.data?.status === 'revision_requested' || res.data?.revision_count > 0) {
+        await loadRevisions();
       }
     } catch (err) {
       console.error('Failed to load order', err);
@@ -95,6 +101,19 @@ export default function OrderDetail() {
       console.error('Failed to load work files', err);
     } finally {
       setLoadingWorkFiles(false);
+    }
+  };
+
+  const loadRevisions = async () => {
+    if (!user?.id) return;
+    try {
+      setLoadingRevisions(true);
+      const res = await axiosInstance.get(`/api/orders/${orderId}/revisions?user_id=${user.id}`);
+      setRevisions(res.data?.revisions || []);
+    } catch (err) {
+      console.error('Failed to load revisions', err);
+    } finally {
+      setLoadingRevisions(false);
     }
   };
 
@@ -171,6 +190,7 @@ export default function OrderDetail() {
 
       await fetchOrder();
       await loadMessages();
+      await loadWorkFiles(); // Reload work files to show the delivery
       setDeliveryFile(null);
       setDeliveryNote('');
       alert('Order marked as delivered');
@@ -243,6 +263,7 @@ export default function OrderDetail() {
       );
 
       await fetchOrder();
+      await loadWorkFiles(); // Reload work files to show the new upload
       setRevisionFile(null);
       setRevisionNote('');
       alert('Revised work uploaded successfully');
@@ -493,12 +514,53 @@ export default function OrderDetail() {
             {isFreelancer && order.status === 'revision_requested' && (
               <>
                 <Divider sx={{ my: 2 }} />
+                
+                {/* Revision Context Display */}
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6" sx={{ mb: 2, color: '#ff9800' }}>
+                    🔄 Revision Details
+                  </Typography>
+                  {loadingRevisions ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                      <CircularProgress size={16} />
+                      <Typography variant="body2">Loading revision details...</Typography>
+                    </Box>
+                  ) : (
+                    <>
+                      {revisions.map((revision) => (
+                        <Paper
+                          key={revision.revision_no}
+                          sx={{
+                            p: 2,
+                            mb: 2,
+                            border: '1px solid #ff9800',
+                            borderRadius: 2,
+                            backgroundColor: '#fff3e0'
+                          }}
+                        >
+                          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: '#ff9800' }}>
+                            Revision Request #{revision.revision_no}
+                          </Typography>
+                          <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+                            {revision.revision_text}
+                          </Typography>
+                        </Paper>
+                      ))}
+                      {revisions.length === 0 && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontStyle: 'italic' }}>
+                          Revision context not available. Please check with the client for details.
+                        </Typography>
+                      )}
+                    </>
+                  )}
+                </Box>
+
                 <Box>
                   <Typography variant="h6" sx={{ mb: 2, color: '#ff9800' }}>
-                    📝 Revision Requested - Upload Revised Work
+                    📝 Upload Revised Work
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    The client has requested revisions. Please upload the revised version of your work.
+                    Please address the revision requests above and upload the revised version of your work.
                   </Typography>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>Attach revised work</Typography>
                   <Button
@@ -538,6 +600,41 @@ export default function OrderDetail() {
                   </Button>
                   {revisionError && (
                     <Alert severity="error" sx={{ mt: 1 }}>{revisionError}</Alert>
+                  )}
+                </Box>
+              </>
+            )}
+
+            {isClient && (order.status === 'revision_requested' || order.status === 'in_progress') && workFiles.length > 0 && (
+              <>
+                <Divider sx={{ my: 2 }} />
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="h6" sx={{ mb: 1 }}>
+                    📦 Work in Progress 
+                    {order.status === 'revision_requested' && <Chip label="Revision Requested" color="warning" size="small" sx={{ ml: 1 }} />}
+                  </Typography>
+                  {loadingWorkFiles ? (
+                    <CircularProgress size={24} />
+                  ) : (
+                    <Box>
+                      {workFiles.map((file, idx) => (
+                        <Box key={idx} sx={{ p: 1.5, border: '1px solid #ddd', borderRadius: 1, mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            📎 <a href={`http://localhost:8000/${file.file_path}`} target="_blank" rel="noopener noreferrer" download>
+                              {file.file_name}
+                            </a>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {(file.file_size / 1024).toFixed(2)} KB • {new Date(file.uploaded_at).toLocaleString()}
+                          </Typography>
+                        </Box>
+                      ))}
+                      {order.status === 'revision_requested' && (
+                        <Typography variant="body2" color="warning.main" sx={{ mt: 1, fontStyle: 'italic' }}>
+                          📝 The freelancer is working on your revision request. Latest files are shown above.
+                        </Typography>
+                      )}
+                    </Box>
                   )}
                 </Box>
               </>

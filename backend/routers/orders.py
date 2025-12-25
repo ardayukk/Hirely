@@ -326,17 +326,40 @@ async def deliver_order(order_id: int, freelancer_id: int = Query(...)):
     """Freelancer marks order as delivered"""
     async with get_connection() as conn:
         async with conn.cursor() as cur:
+            # Verify order belongs to freelancer and check current status
             await cur.execute(
-                'SELECT order_id FROM "Order" WHERE order_id = %s AND freelancer_id = %s',
+                '''
+                SELECT order_id, status, revision_count, included_revision_limit
+                FROM "Order" 
+                WHERE order_id = %s AND freelancer_id = %s
+                ''',
                 (order_id, freelancer_id),
             )
-            if not await cur.fetchone():
+            row = await cur.fetchone()
+            if not row:
                 raise HTTPException(status_code=403, detail="Order does not belong to freelancer")
-
-            await cur.execute(
-                'UPDATE "Order" SET status = %s WHERE order_id = %s',
-                ("delivered", order_id),
-            )
+            
+            current_status, revision_count, included_limit = row[1], row[2], row[3]
+            
+            # Check if this is a revision delivery and if limits are exceeded
+            if current_status == "revision_requested":
+                if included_limit is not None:
+                    if revision_count > included_limit:
+                        raise HTTPException(
+                            status_code=400, 
+                            detail=f"Cannot deliver: revision limit exceeded ({revision_count}/{included_limit}). Client must purchase additional revisions."
+                        )
+                # Mark revision as resolved by updating status to delivered
+                await cur.execute(
+                    'UPDATE "Order" SET status = %s WHERE order_id = %s',
+                    ("delivered", order_id),
+                )
+            else:
+                # For non-revision deliveries, just mark as delivered
+                await cur.execute(
+                    'UPDATE "Order" SET status = %s WHERE order_id = %s',
+                    ("delivered", order_id),
+                )
             await conn.commit()
             return {"message": "Order delivered"}
 
@@ -349,22 +372,32 @@ async def upload_work(
     description: Optional[str] = Form(None),
 ):
     """Upload work/deliverable for an order. If status is revision_requested, this replaces the previous work."""
+    
+    # First, verify order and get status
     async with get_connection() as conn:
         async with conn.cursor() as cur:
             # Verify order belongs to freelancer and get status
             await cur.execute(
-                'SELECT order_id, status FROM "Order" WHERE order_id = %s AND freelancer_id = %s',
+                'SELECT order_id, status, revision_count, included_revision_limit FROM "Order" WHERE order_id = %s AND freelancer_id = %s',
                 (order_id, freelancer_id),
             )
             order_row = await cur.fetchone()
             if not order_row:
                 raise HTTPException(status_code=403, detail="Order does not belong to freelancer")
             
-            status = order_row[1]
+            order_id_db, status, revision_count, included_limit = order_row
             
             # Only allow work upload for orders that are in_progress or revision_requested
             if status not in ("in_progress", "revision_requested"):
-                raise HTTPException(status_code=400, detail="Order status does not allow work upload")
+                raise HTTPException(status_code=400, detail=f"Order status '{status}' does not allow work upload")
+            
+            # For revision_requested status, check if revision limit allows more work
+            if status == "revision_requested" and included_limit is not None:
+                if revision_count > included_limit:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Revision limit exceeded ({revision_count}/{included_limit}). Cannot upload more work."
+                    )
 
     # Validate file
     if not file.filename:
@@ -406,13 +439,24 @@ async def upload_work(
     # Return file metadata
     relative_path = f"uploads/work/order_{order_id}/{unique_filename}"
     
+    # If this was a revision upload, update status to indicate work is ready for delivery
+    if status == "revision_requested":
+        async with get_connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    'UPDATE "Order" SET status = %s WHERE order_id = %s',
+                    ("in_progress", order_id),
+                )
+                await conn.commit()
+    
     return {
         "order_id": order_id,
         "file_name": file.filename,
         "file_path": relative_path,
         "file_size": file_size,
         "description": description or "",
-        "uploaded_at": datetime.now().isoformat()
+        "uploaded_at": datetime.now().isoformat(),
+        "status_updated": status == "revision_requested"
     }
 
 
@@ -484,10 +528,10 @@ async def request_revision(order_id: int, revision: RevisionCreate, client_id: i
     """Client requests a revision"""
     async with get_connection() as conn:
         async with conn.cursor() as cur:
-            # Verify order belongs to client + fetch revision policy
+            # Verify order belongs to client + fetch revision policy and freelancer_id
             await cur.execute(
                 '''
-                SELECT o.client_id, o.revision_count, o.status, o.included_revision_limit
+                SELECT o.client_id, o.revision_count, o.status, o.included_revision_limit, o.freelancer_id
                 FROM "Order" o
                 WHERE o.order_id = %s
                 ''',
@@ -499,43 +543,43 @@ async def request_revision(order_id: int, revision: RevisionCreate, client_id: i
             if row[0] != client_id:
                 raise HTTPException(status_code=403, detail="Order does not belong to client")
 
-            revision_count, status, included_limit = row[1], row[2], row[3]
+            revision_count, status, included_limit, freelancer_id = row[1], row[2], row[3], row[4]
 
             # Disallow revisions on completed/cancelled orders
             if status in ("completed", "cancelled"):
                 raise HTTPException(status_code=400, detail="Order is closed; revisions are not allowed")
 
+            # Check revision limits
             if included_limit is not None:
                 if revision_count >= included_limit:
                     raise HTTPException(
                         status_code=409,
                         detail=(
                             "Revision limit reached for this order. "
-                            f"Included: {included_limit}, used: {revision_count}. "
+                            f"Allowed: {included_limit}, used: {revision_count}. "
                             "Purchase additional revisions to continue."
                         ),
                     )
 
-            # Concurrency-safe reservation of a revision number
+            # Store revision request in order requirements and update status
             await cur.execute(
                 '''
-                UPDATE "Order" o
-                SET status = %s,
-                    revision_count = revision_count + 1
-                WHERE o.order_id = %s
-                  AND o.status NOT IN ('completed', 'cancelled')
-                  AND (o.included_revision_limit IS NULL OR o.revision_count < o.included_revision_limit)
-                RETURNING o.revision_count
+                UPDATE "Order" 
+                SET status = 'revision_requested',
+                    revision_count = revision_count + 1,
+                    requirements = CASE WHEN requirements IS NULL THEN 'REVISION REQUEST #' || (revision_count + 1)::TEXT || ': ' || %s::TEXT 
+                                       ELSE requirements || E'\n\nREVISION REQUEST #' || (revision_count + 1)::TEXT || ': ' || %s 
+                                  END
+                WHERE order_id = %s
+                  AND status NOT IN ('completed', 'cancelled')
+                  AND (included_revision_limit IS NULL OR revision_count < included_revision_limit)
+                RETURNING revision_count
                 ''',
-                ("revision_requested", order_id),
+                (revision.revision_text, revision.revision_text, order_id),
             )
             updated = await cur.fetchone()
             if not updated:
-                # Another request might have consumed the last allowed revision.
-                raise HTTPException(
-                    status_code=409,
-                    detail="Revision limit reached for this order. Purchase additional revisions to continue.",
-                )
+                raise HTTPException(status_code=409, detail="Failed to request revision")
             revision_no = updated[0]
 
             await conn.commit()
@@ -547,6 +591,50 @@ async def request_revision(order_id: int, revision: RevisionCreate, client_id: i
                 order_id=order_id,
                 client_id=client_id,
             )
+
+
+@router.get("/{order_id}/revisions")
+async def get_order_revisions(order_id: int, user_id: int = Query(...)):
+    """Get all revision requests for an order (for freelancer to see revision context)"""
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify user is part of this order (either client or freelancer)
+            await cur.execute(
+                '''
+                SELECT o.client_id, o.freelancer_id, o.requirements, o.revision_count
+                FROM "Order" o
+                WHERE o.order_id = %s
+                ''',
+                (order_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Order not found")
+            
+            client_id, freelancer_id, requirements, revision_count = row
+            if user_id not in (client_id, freelancer_id):
+                raise HTTPException(status_code=403, detail="Access denied")
+            
+            # Extract revision requests from requirements field
+            revisions = []
+            if requirements:
+                # Split by revision markers and parse
+                parts = requirements.split('REVISION REQUEST #')
+                for i, part in enumerate(parts[1:], 1):  # Skip first part (original requirements)
+                    if ':' in part:
+                        revision_text = part.split(':', 1)[1].strip()
+                        revisions.append({
+                            "revision_no": i,
+                            "revision_text": revision_text,
+                            "order_id": order_id
+                        })
+            
+            return {
+                "order_id": order_id,
+                "revision_count": revision_count,
+                "revisions": revisions,
+                "original_requirements": requirements.split('REVISION REQUEST #')[0].strip() if requirements else ""
+            }
 
 
 @router.post("/{order_id}/purchase-revisions", response_model=OrderDetail)
