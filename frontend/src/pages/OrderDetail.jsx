@@ -407,20 +407,66 @@ export default function OrderDetail() {
                     : `${order.milestone_count - order.current_phase} milestone(s) remaining`}
                 </Typography>
                 <Box sx={{ mt: 2 }}>
-                  <Typography variant="subtitle2">Deliverables</Typography>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Phase Submissions</Typography>
                   {loadingDeliverables ? (
                     <CircularProgress size={20} sx={{ mt: 1 }} />
                   ) : deliverables.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">No deliverables yet.</Typography>
+                    <Typography variant="body2" color="text.secondary">No submissions yet.</Typography>
                   ) : (
-                    deliverables.map((d) => (
-                      <Box key={d.deliverable_id} sx={{ py: 1 }}>
-                        <Typography variant="body2">#{d.deliverable_id}: {d.description}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Due: {d.due_date ? new Date(d.due_date).toLocaleString() : 'N/A'} | Status: {d.status}
-                        </Typography>
-                      </Box>
-                    ))
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fill, minmax(280px, 1fr))' }, gap: 1.5 }}>
+                      {deliverables.map((d) => (
+                        <Paper
+                          key={d.deliverable_id}
+                          sx={{
+                            p: 1.5,
+                            border: '1px solid',
+                            borderColor: d.status === 'submitted' ? 'success.light' : 'grey.300',
+                            borderRadius: 1,
+                            backgroundColor: d.status === 'submitted' ? 'rgba(76, 175, 80, 0.05)' : 'transparent',
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                            <Chip
+                              size="small"
+                              label={`Phase ${d.phase_number || 'N/A'}`}
+                              color={d.status === 'submitted' ? 'success' : 'default'}
+                              icon={d.status === 'submitted' ? '✓' : undefined}
+                            />
+                            <Typography variant="caption" color="text.secondary">
+                              {d.submitted_at ? new Date(d.submitted_at).toLocaleDateString() : 'Pending'}
+                            </Typography>
+                          </Box>
+                          {d.description && (
+                            <Typography variant="body2" sx={{ mb: 1, fontStyle: 'italic', color: 'text.secondary' }}>
+                              "{d.description}"
+                            </Typography>
+                          )}
+                          {d.file_url && (
+                            <Box sx={{ mt: 1, p: 1, backgroundColor: '#f5f5f5', borderRadius: 0.5 }}>
+                              <Typography variant="caption" display="block" sx={{ mb: 0.5, fontWeight: 500 }}>
+                                📎 Submitted File:
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: 'primary.main',
+                                  textDecoration: 'underline',
+                                  cursor: 'pointer',
+                                  wordBreak: 'break-word',
+                                }}
+                                component="a"
+                                href={`http://localhost:8000/${d.file_url}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                download
+                              >
+                                {d.file_url.split('/').pop()}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Paper>
+                      ))}
+                    </Box>
                   )}
                 </Box>
               </Box>

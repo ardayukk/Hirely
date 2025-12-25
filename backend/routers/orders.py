@@ -443,11 +443,47 @@ async def upload_work(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
     
-    # Return file metadata
+    # Store deliverable record with file path and phase info
     relative_path = f"uploads/work/order_{order_id}/{unique_filename}"
+    async with get_connection() as conn_deliverable:
+        async with conn_deliverable.cursor() as cur_d:
+            # Check if deliverable exists for this phase
+            if phase_number:
+                await cur_d.execute(
+                    '''
+                    SELECT deliverable_id FROM "Deliverable"
+                    WHERE order_id = %s AND phase_number = %s
+                    ''',
+                    (order_id, phase_number),
+                )
+                existing = await cur_d.fetchone()
+                
+                if existing:
+                    # Update existing deliverable with new file
+                    await cur_d.execute(
+                        '''
+                        UPDATE "Deliverable"
+                        SET file_url = %s, description = %s, status = %s, submitted_at = NOW()
+                        WHERE order_id = %s AND phase_number = %s
+                        ''',
+                        (relative_path, description or "", "submitted", order_id, phase_number),
+                    )
+                else:
+                    # Create new deliverable
+                    await cur_d.execute(
+                        '''
+                        INSERT INTO "Deliverable" (order_id, description, phase_number, file_url, status, submitted_at)
+                        VALUES (%s, %s, %s, %s, %s, NOW())
+                        ''',
+                        (order_id, description or "", phase_number, relative_path, "submitted"),
+                    )
+            
+            await conn_deliverable.commit()
     
+    # Return file metadata
     return {
         "order_id": order_id,
+        "phase_number": phase_number,
         "file_name": file.filename,
         "file_path": relative_path,
         "file_size": file_size,
