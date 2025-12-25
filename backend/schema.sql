@@ -70,8 +70,6 @@ CREATE TABLE IF NOT EXISTS "SampleWork" (
     FOREIGN KEY (service_id) REFERENCES "Service"(service_id) ON DELETE CASCADE
 );
 
-
-
 -- ============================================
 -- PAYMENTS & ORDERS
 -- ============================================

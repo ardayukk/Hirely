@@ -89,19 +89,13 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                 requirements_json = json.dumps(order.requirements) if getattr(order, 'requirements', None) is not None else None
                 await cur.execute(
                     '''
-                    INSERT INTO "Order" (order_date, status, revision_count, included_revision_limit, extra_revisions_purchased, total_price, review_given, required_hours, requirements)
-                    VALUES (NOW(), 'pending', 0, %s, 0, %s, FALSE, %s, %s)
+                    INSERT INTO "Order" (client_id, freelancer_id, service_id, status, revision_count, included_revision_limit, total_price, requirements)
+                    VALUES (%s, %s, %s, 'pending', 0, %s, %s, %s)
                     RETURNING order_id
                     ''',
-                    (included_revision_limit, order.total_price, getattr(order, 'required_hours', None), requirements_json),
+                    (client_id, freelancer_id, service_id, included_revision_limit, order.total_price, requirements_json),
                 )
                 order_id = (await cur.fetchone())[0]
-
-                # 2. Link client + service via make_order
-                await cur.execute(
-                    'INSERT INTO make_order (order_id, client_id, service_id) VALUES (%s, %s, %s)',
-                    (order_id, client_id, service_id),
-                )
 
                 # 3. Insert into SmallOrder or BigOrder
                 if order.order_type == "small":
@@ -121,15 +115,15 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
 
                 # 4. Create Payment (escrow on order placement)
                 await cur.execute(
-                    'INSERT INTO "Payment" (amount, payment_date) VALUES (%s, NOW()) RETURNING payment_id',
+                    'INSERT INTO "Payment" (amount) VALUES (%s) RETURNING payment_id',
                     (order.total_price,),
                 )
                 payment_id = (await cur.fetchone())[0]
 
-                # Link payment + freelancer + order via finish_order
+                # Update Order with payment_id
                 await cur.execute(
-                    'INSERT INTO finish_order (order_id, payment_id, freelancer_id) VALUES (%s, %s, %s)',
-                    (order_id, payment_id, freelancer_id),
+                    'UPDATE "Order" SET payment_id = %s WHERE order_id = %s',
+                    (payment_id, order_id),
                 )
 
                 # 5. Optional add-ons selected by client
@@ -137,12 +131,12 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                     for aid in order.addon_service_ids:
                         # ensure addon is a valid add-on for this service
                         await cur.execute(
-                            'SELECT 1 FROM add_on WHERE (service_id1 = %s AND service_id2 = %s) OR (service_id1 = %s AND service_id2 = %s) LIMIT 1',
-                            (service_id, aid, aid, service_id),
+                            'SELECT 1 FROM "OrderAddon" WHERE order_id = %s AND addon_service_id = %s LIMIT 1',
+                            (order_id, aid),
                         )
-                        if await cur.fetchone():
+                        if not await cur.fetchone():
                             await cur.execute(
-                                'INSERT INTO order_addon (order_id, addon_service_id) VALUES (%s, %s) ON CONFLICT DO NOTHING',
+                                'INSERT INTO "OrderAddon" (order_id, addon_service_id) VALUES (%s, %s)',
                                 (order_id, aid),
                             )
 

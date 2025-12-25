@@ -58,10 +58,17 @@ export default function Checkout() {
       setLoading(true);
       setError('');
 
-      const normalizedDelivery = orderType === 'small' && deliveryDate ? deliveryDate : null;
+      // Convert YYYY-MM-DD format to ISO datetime (YYYY-MM-DDTHH:MM:SS)
+      const toISODateTime = (dateStr) => {
+        if (!dateStr) return null;
+        return `${dateStr}T00:00:00`;
+      };
+
+      const normalizedDelivery = orderType === 'small' && deliveryDate ? toISODateTime(deliveryDate) : null;
       const normalizedMilestones = orderType === 'big'
         ? Math.max(1, Math.min(10, parseInt(milestoneCount, 10) || 3))
         : null;
+      const normalizedMilestoneDate = orderType === 'big' && deliveryDate ? toISODateTime(deliveryDate) : null;
 
       const payload = {
         service_id: parseInt(serviceId),
@@ -69,6 +76,7 @@ export default function Checkout() {
         order_type: orderType,
         delivery_date: normalizedDelivery,
         milestone_count: orderType === 'big' ? normalizedMilestones : null,
+        milestone_delivery_date: normalizedMilestoneDate,
         requirements: requirementsText ? { description: requirementsText } : null,
         addon_service_ids: selectedAddons || [],
       };
