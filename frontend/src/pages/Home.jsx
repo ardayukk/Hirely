@@ -2,10 +2,13 @@ import React from 'react';
 import { Box, Container, Typography, Stack, Button, Card, CardContent, CardHeader, Grid, useTheme } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { Rocket as RocketIcon, Store as StoreIcon, BarChart as AnalyticsIcon, Code as CodeIcon } from '@mui/icons-material';
+import { useAuth } from '../context/Authcontext';
 
 export default function Home() {
     const navigate = useNavigate();
     const theme = useTheme();
+    const { user } = useAuth();
+    const role = (user?.role || '').toLowerCase();
 
     const ActionGroup = ({ icon: Icon, title, description, actions }) => (
         <Card
@@ -52,6 +55,59 @@ export default function Home() {
         </Card>
     );
 
+    const cards = [
+        {
+            key: 'freelancer',
+            roles: ['freelancer'],
+            icon: StoreIcon,
+            title: 'Freelancer',
+            description: 'Showcase your skills, create services, and start earning.',
+            actions: [
+                { label: 'Create service', to: '/create-service', variant: 'contained' },
+                { label: 'My services', to: '/myServices' },
+                { label: 'Orders', to: '/orders' },
+                { label: 'Inbox', to: '/inbox' },
+            ],
+        },
+        {
+            key: 'client',
+            roles: ['client'],
+            icon: CodeIcon,
+            title: 'Client',
+            description: 'Find and hire the perfect freelancer for your project.',
+            actions: [
+                { label: 'Browse services', to: '/services', variant: 'contained' },
+                { label: 'My orders', to: '/orders' },
+                { label: 'Messages', to: '/inbox' },
+            ],
+        },
+        {
+            key: 'admin',
+            roles: ['admin'],
+            icon: AnalyticsIcon,
+            title: 'Admin',
+            description: 'Manage platform, disputes, users, and analytics.',
+            actions: [
+                { label: 'Admin panel', to: '/admin', variant: 'contained' },
+                { label: 'Manage users', to: '/admin' },
+            ],
+        },
+        {
+            key: 'quick',
+            roles: ['freelancer', 'client', 'admin'],
+            icon: RocketIcon,
+            title: 'Quick Links',
+            description: 'Access core platform features and resources.',
+            actions: [
+                { label: 'All services', to: '/services' },
+                { label: 'Notifications', to: '/notifications' },
+                { label: 'Profile', to: '/profile' },
+            ],
+        },
+    ];
+
+    const visibleCards = cards.filter((card) => role && card.roles.includes(role));
+
     return (
         <Box
             sx={{
@@ -82,57 +138,16 @@ export default function Home() {
                     </Box>
 
                     <Grid container spacing={3}>
-                        <Grid item xs={12} md={6}>
-                            <ActionGroup
-                                icon={StoreIcon}
-                                title="Freelancer"
-                                description="Showcase your skills, create services, and start earning."
-                                actions={[
-                                    { label: "Create service", to: "/create-service", variant: "contained" },
-                                    { label: "My services", to: "/myServices" },
-                                    { label: "Orders", to: "/orders" },
-                                    { label: "Inbox", to: "/inbox" },
-                                ]}
-                            />
-                        </Grid>
-
-                        <Grid item xs={12} md={6}>
-                            <ActionGroup
-                                icon={CodeIcon}
-                                title="Client"
-                                description="Find and hire the perfect freelancer for your project."
-                                actions={[
-                                    { label: "Browse services", to: "/services", variant: "contained" },
-                                    { label: "My orders", to: "/orders" },
-                                    { label: "Messages", to: "/inbox" },
-                                ]}
-                            />
-                        </Grid>
-
-                        <Grid item xs={12} md={6}>
-                            <ActionGroup
-                                icon={AnalyticsIcon}
-                                title="Admin"
-                                description="Manage platform, disputes, users, and analytics."
-                                actions={[
-                                    { label: "Admin panel", to: "/admin", variant: "contained" },
-                                    { label: "Manage users", to: "/admin" },
-                                ]}
-                            />
-                        </Grid>
-
-                        <Grid item xs={12} md={6}>
-                            <ActionGroup
-                                icon={RocketIcon}
-                                title="Quick Links"
-                                description="Access all platform features and resources."
-                                actions={[
-                                    { label: "All services", to: "/services" },
-                                    { label: "Notifications", to: "/notifications" },
-                                    { label: "Profile", to: "/profile" },
-                                ]}
-                            />
-                        </Grid>
+                        {visibleCards.map((card) => (
+                            <Grid item xs={12} md={6} key={card.key}>
+                                <ActionGroup
+                                    icon={card.icon}
+                                    title={card.title}
+                                    description={card.description}
+                                    actions={card.actions}
+                                />
+                            </Grid>
+                        ))}
                     </Grid>
                 </Stack>
             </Container>

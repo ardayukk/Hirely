@@ -268,39 +268,6 @@ export default function Profile() {
               </CardContent>
             </Card>
 
-            {/* Role Management */}
-            <Card sx={{ borderRadius: 3, boxShadow: theme.shadows[8] }}>
-              <CardHeader
-                title="Account Type"
-                titleTypographyProps={{ variant: 'h6', fontWeight: 700 }}
-                sx={{ pb: 1 }}
-              />
-              <Divider />
-              <CardContent sx={{ p: 4 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Switch between Freelancer and Client roles. You can also work as both!
-                </Typography>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  <Button
-                    variant={profile.role === 'freelancer' ? 'contained' : 'outlined'}
-                    startIcon={<PersonAddIcon />}
-                    onClick={() => handleDevRole('freelancer')}
-                    sx={{ textTransform: 'none' }}
-                  >
-                    Be a Freelancer
-                  </Button>
-                  <Button
-                    variant={profile.role === 'client' ? 'contained' : 'outlined'}
-                    startIcon={<PersonAddIcon />}
-                    onClick={() => handleDevRole('client')}
-                    sx={{ textTransform: 'none' }}
-                  >
-                    Be a Client
-                  </Button>
-                </Stack>
-              </CardContent>
-            </Card>
-
             {/* Danger Zone */}
             <Card
               sx={{

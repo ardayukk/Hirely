@@ -1,6 +1,7 @@
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import { AppBar, Button, Container, IconButton, Toolbar } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { useContext } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/Authcontext'; // ✅ import your Auth hook (fixed relative path & filename case)
@@ -31,6 +32,7 @@ function AppContent() {
     const navigate = useNavigate(); // ✅ useNavigate hook
     const { user, logout } = useAuth(); // ✅ get logout from context
     const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
+    const theme = useTheme();
 
     const requireAuth = (element) => (user ? element : <Navigate to="/login" replace />);
 
@@ -51,19 +53,25 @@ function AppContent() {
     return (
         <>
             {!isAuthPage && user && ( // ✅ only show AppBar if user is logged in
-                <AppBar position="static" color="transparent" elevation={0} sx={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                <AppBar
+                    position="static"
+                    color="transparent"
+                    elevation={0}
+                    sx={{
+                        backgroundColor: theme.palette.background.paper,
+                        color: theme.palette.text.primary,
+                        borderBottom: `1px solid ${theme.palette.divider}`,
+                    }}
+                >
                     <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Button component={Link} to="/home#freelancer" variant="text">Freelancer</Button>
-                            <Button component={Link} to="/home#user" variant="text">User</Button>
-                            <Button component={Link} to="/home#admin" variant="text">Admin</Button>
-                            <Button component={Link} to="/services" variant="text">Services</Button>
+                            <Button component={Link} to="/home" variant="text">Home</Button>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Button component={Link} to="/home">Home</Button>
                             <Button component={Link} to="/notifications">Notifications</Button>
-                            <Button onClick={handleLogout}>Logout</Button>
+                            <Button component={Link} to="/services" variant="text">Services</Button>
                             <Button component={Link} to="/profile">Profile</Button>
+                            <Button onClick={handleLogout}>Logout</Button>
                             <ThemeToggle />
                         </div>
                     </Toolbar>
