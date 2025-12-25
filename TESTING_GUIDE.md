@@ -98,20 +98,7 @@ This guide walks through each schema feature to verify it's working in the UI.
 
 ---
 
-### 8. ✅ Warranty & Claims
-**Path 1**: Orders page → Click completed order → "View Warranty & Claims"
-**Path 2**: `/warranty/{orderId}` directly
-**What to Test**:
-- [ ] Warranty details load (duration, terms, dates)
-- [ ] Claims section shows all filed claims
-- [ ] Can file new warranty claim with description
-- [ ] Claims show status (pending/approved/rejected)
-- [ ] Resolution notes display if claim resolved
-**Expected Data**: ServiceWarranty, WarrantyClaim tables with claim_date, status, resolution
-
----
-
-### 9. ✅ Reviews
+### 8. ✅ Reviews
 **Path**: Service Detail page (scroll to "Reviews" section)
 **What to Test**:
 - [ ] "Reviews" section shows count
@@ -122,7 +109,7 @@ This guide walks through each schema feature to verify it's working in the UI.
 
 ---
 
-### 10. ✅ Deliverables (Big Orders)
+### 9. ✅ Deliverables (Big Orders)
 **Path**: Orders page → Click a big order → "Deliverables" section
 **What to Test**:
 - [ ] Deliverables section visible for multi-milestone orders
@@ -133,7 +120,7 @@ This guide walks through each schema feature to verify it's working in the UI.
 
 ---
 
-### 11. ✅ Order Lifecycle (Small vs Big)
+### 10. ✅ Order Lifecycle (Small vs Big)
 **Path**: Orders page or Create Order
 **What to Test**:
 - [ ] Can create SmallOrder (single delivery date)
@@ -145,7 +132,7 @@ This guide walks through each schema feature to verify it's working in the UI.
 
 ---
 
-### 12. ✅ Messaging with Files
+### 11. ✅ Messaging with Files
 **Path**: Order Detail page → "Chat" or scroll to messages section
 **What to Test**:
 - [ ] Can send text messages
@@ -157,7 +144,7 @@ This guide walks through each schema feature to verify it's working in the UI.
 
 ---
 
-### 13. ✅ Disputes
+### 12. ✅ Disputes
 **Path**: Order Detail page → "Open Dispute" button
 **What to Test**:
 - [ ] Can open dispute when order not disputed
@@ -169,7 +156,7 @@ This guide walks through each schema feature to verify it's working in the UI.
 
 ---
 
-### 14. ✅ Notifications
+### 13. ✅ Notifications
 **Path**: Navbar → "Notifications"
 **What to Test**:
 - [ ] Notifications page loads
@@ -180,7 +167,7 @@ This guide walks through each schema feature to verify it's working in the UI.
 
 ---
 
-### 15. ✅ Analytics (Admin View)
+### 14. ✅ Analytics (Admin View)
 **Path**: Admin panel or Analytics pages (if role is admin)
 **What to Test**:
 - [ ] Can view various analytics reports
@@ -212,8 +199,6 @@ SELECT 'PricingHistory', COUNT(*) FROM "PricingHistory"
 UNION
 SELECT 'ServiceVersion', COUNT(*) FROM "ServiceVersion"
 UNION
-SELECT 'ServiceWarranty', COUNT(*) FROM "ServiceWarranty"
-UNION
 SELECT 'Review', COUNT(*) FROM "Review"
 UNION
 SELECT 'Notification', COUNT(*) FROM "Notification";
@@ -238,10 +223,7 @@ Expected results show data in at least 10+ tables.
 - Ensure Portfolio table has data from seed script
 - Verify freelancer_id matches an actual Freelancer user
 
-### "Warranty not found"
-- Not all services have warranties
-- Check ServiceWarranty table for entries
-- Try with service_id that has warranty in database
+ 
 
 ---
 

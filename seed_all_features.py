@@ -75,7 +75,7 @@ def run():
                 'ServiceAddon','OrderAddon',
                 'Portfolio','PortfolioTag','PortfolioTagMapping',
                 'Favorite','AvailabilitySlot','PricingHistory',
-                'ServiceWarranty','WarrantyClaim','TimeEntry','ServiceVersion',
+                'TimeEntry','ServiceVersion',
                 'create_service','make_order','finish_order',
                 'Messages','Send_Message','Receive_Message','File',
                 'Dispute','DisputeEvidence','reported','Notification'
@@ -238,13 +238,7 @@ def run():
             cur.execute('INSERT INTO "Deliverable" (order_id, description, due_date, payment_amount, status, phase_number) VALUES (%s,%s,%s,%s,%s,%s)',
                         (order_big, "High-fidelity mockups", now + timedelta(days=10), 150.00, 'in_progress', 2))
 
-            # Warranty and claim
-            print("🛡️ Warranty + claim...")
-            cur.execute('INSERT INTO "ServiceWarranty" (service_id, duration_days, description, terms, active) VALUES (%s,%s,%s,%s,TRUE) RETURNING warranty_id',
-                        (service_ids[1], 90, "Design warranty", "Covers minor adjustments",))
-            warranty_id = cur.fetchone()[0]
-            cur.execute('INSERT INTO "WarrantyClaim" (warranty_id, order_id, client_id, description, status) VALUES (%s,%s,%s,%s,%s)',
-                        (warranty_id, order_big, client_id, "Logo alignment issue", 'open'))
+            # Warranty feature removed
 
             # Time tracking entries
             print("⏱️ Time entries...")

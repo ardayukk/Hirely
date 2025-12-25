@@ -62,22 +62,7 @@ This document summarizes all the backend schema features (from `schema.sql`) tha
   - `GET /api/availability/{freelancer_id}` - Returns all slots with booking status
 - **Features**: Shows available and booked slots with dates/times, linked to orders
 
-### 6. ✅ **Service Warranty & Claims** (ServiceWarranty, WarrantyClaim)
-- **Schema Tables**: `ServiceWarranty`, `WarrantyClaim`
-- **Status**: FULLY IMPLEMENTED
-- **Frontend Pages**:
-  - `/warranty/{orderId}` - View warranty details and file claims
-  - OrderDetail page shows **"View Warranty & Claims"** button for completed orders
-- **Backend Endpoints**:
-  - `GET /api/warranty/{order_id}` - Get warranty and claims for order
-  - `POST /api/warranty/{order_id}/claim` - File new warranty claim
-- **Features**: 
-  - Display warranty duration, issue/expiry dates, terms
-  - File claims with description
-  - Track claim status (pending/approved/rejected)
-  - View resolution notes
-
-### 7. ✅ **Pricing History** (PricingHistory)
+### 6. ✅ **Pricing History** (PricingHistory)
 - **Schema Table**: `PricingHistory`
 - **Status**: FULLY IMPLEMENTED
 - **Frontend Pages**:
@@ -91,7 +76,7 @@ This document summarizes all the backend schema features (from `schema.sql`) tha
   - Reason for price change (demand, discount, manual)
   - Chronological display with newest first
 
-### 8. ✅ **Service Versions** (ServiceVersion)
+### 7. ✅ **Service Versions** (ServiceVersion)
 - **Schema Table**: `ServiceVersion`
 - **Status**: FULLY IMPLEMENTED
 - **Frontend Pages**:
@@ -105,44 +90,44 @@ This document summarizes all the backend schema features (from `schema.sql`) tha
   - Highlights current version
   - Chronological ordering newest first
 
-### 9. ✅ **Time Tracking** (TimeEntry)
+### 8. ✅ **Time Tracking** (TimeEntry)
 - **Schema Table**: `TimeEntry`
 - **Status**: IN SCHEMA (seeded with data)
 - **Note**: Backend has support; dedicated UI page can be added for freelancers to log time
 - **Data Available**: freelancer_id, order_id, hours, date, status
 
-### 10. ✅ **Reviews** (Review)
+### 9. ✅ **Reviews** (Review)
 - **Schema Table**: `Review`
 - **Status**: FULLY IMPLEMENTED
 - **Display**: Service Detail page shows reviews in dedicated section
 - **Data Shown**: Rating, comment, client ID, review count
 - **Backend**: Fetched via order relationships
 
-### 11. ✅ **Deliverables** (Deliverable)
+### 10. ✅ **Deliverables** (Deliverable)
 - **Schema Table**: `Deliverable`
 - **Status**: FULLY IMPLEMENTED
 - **Display**: OrderDetail page shows deliverables for big orders
 - **Features**: Description, due date, payment amount, status tracking
 
-### 12. ✅ **Orders** (Order, SmallOrder, BigOrder)
+### 11. ✅ **Orders** (Order, SmallOrder, BigOrder)
 - **Schema Tables**: `Order`, `SmallOrder`, `BigOrder`
 - **Status**: FULLY IMPLEMENTED
 - **Pages**: `/orders`, `/orders/{orderId}`
 - **Features**: Full order lifecycle, revision requests, dispute resolution
 
-### 13. ✅ **Messages** (Messages, File)
+### 12. ✅ **Messages** (Messages, File)
 - **Schema Tables**: `Messages`, `File`
 - **Status**: FULLY IMPLEMENTED
 - **Display**: OrderDetail page includes chat/messaging section
 - **Features**: Send messages with file attachments, track conversations
 
-### 14. ✅ **Disputes** (Dispute, DisputeEvidence)
+### 13. ✅ **Disputes** (Dispute, DisputeEvidence)
 - **Schema Tables**: `Dispute`, `DisputeEvidence`
 - **Status**: FULLY IMPLEMENTED
 - **Display**: OrderDetail page supports dispute opening and response
 - **Features**: File dispute, respond to dispute, attach evidence
 
-### 15. ✅ **Notifications** (Notification)
+### 14. ✅ **Notifications** (Notification)
 - **Schema Table**: `Notification`
 - **Status**: FULLY IMPLEMENTED
 - **Page**: `/notifications`
@@ -162,7 +147,6 @@ This document summarizes all the backend schema features (from `schema.sql`) tha
 - **"Edit Service"** (if owner) → Modify service details
 
 ### From Order Detail Page
-- **"View Warranty & Claims"** (if completed) → File warranty claims or view existing ones
 - **"Chat"** → Message the other party
 - **"Leave Review"** (if client) → Rate the service
 - **"Open Dispute"** → Open dispute for quality issues
@@ -186,7 +170,6 @@ This document summarizes all the backend schema features (from `schema.sql`) tha
 | Portfolio | Portfolio, PortfolioTag | /portfolio/{id} | ✅ /api/portfolio/{id} | ✅ Complete |
 | Sample Work | SampleWork | Service Detail | ✅ /api/services/{id} | ✅ Complete |
 | Availability | AvailabilitySlot | /availability/{id} | ✅ /api/availability/{id} | ✅ Complete |
-| Warranty & Claims | ServiceWarranty, WarrantyClaim | /warranty/{orderId} | ✅ /api/warranty/{orderId} | ✅ Complete |
 | Pricing History | PricingHistory | /pricing-history/{id} | ✅ /api/pricing-history/{id} | ✅ Complete |
 | Service Versions | ServiceVersion | /service-versions/{id} | ✅ /api/services/{id}/versions | ✅ Complete |
 | Time Entries | TimeEntry | (In schema) | - | ⚠️ Partial |
@@ -203,18 +186,15 @@ This document summarizes all the backend schema features (from `schema.sql`) tha
 
 ### Frontend Changes
 - ✅ Created `/pages/Availability.jsx` - Display freelancer availability slots
-- ✅ Created `/pages/Warranty.jsx` - File and track warranty claims
 - ✅ Created `/pages/PricingHistory.jsx` - View service pricing trends
 - ✅ Created `/pages/Favorites.jsx` - View saved services and freelancers
 - ✅ Created `/pages/Portfolio.jsx` - View freelancer portfolio items
 - ✅ Updated `ServiceDetail.jsx` - Added addon display, favorite button, portfolio/availability/pricing links
-- ✅ Updated `OrderDetail.jsx` - Added warranty link
 - ✅ Updated `App.jsx` - Added all new routes and imports
 - ✅ Added "Favorites" link to navbar for clients
 
 ### Backend Changes
 - ✅ Created `routers/availability.py` - Endpoint: GET /api/availability/{freelancer_id}
-- ✅ Created `routers/warranty.py` - Endpoints: GET /api/warranty/{order_id}, POST /api/warranty/{order_id}/claim
 - ✅ Created `routers/pricing_history.py` - Endpoint: GET /api/pricing-history/{service_id}
 - ✅ Updated `routers/services.py` - Fetch and return ServiceAddon objects in service detail
 - ✅ Updated `main.py` - Registered all new routers
@@ -248,7 +228,6 @@ This document summarizes all the backend schema features (from `schema.sql`) tha
 5. **View Favorites** from navbar
 
 6. **View Orders** → Click on completed order
-   - Click "View Warranty & Claims" to file warranty claims
 
 7. **View Notifications** from navbar
 
@@ -258,19 +237,16 @@ This document summarizes all the backend schema features (from `schema.sql`) tha
 
 ### New Files Created:
 - `frontend/src/pages/Availability.jsx` (119 lines)
-- `frontend/src/pages/Warranty.jsx` (247 lines)
 - `frontend/src/pages/PricingHistory.jsx` (190 lines)
 - `frontend/src/pages/ServiceVersions.jsx` (164 lines)
 - `frontend/src/pages/Favorites.jsx` (170 lines)
 - `frontend/src/pages/Portfolio.jsx` (106 lines)
 - `backend/routers/availability.py` (41 lines)
-- `backend/routers/warranty.py` (114 lines)
 - `backend/routers/pricing_history.py` (48 lines)
 
 ### Files Modified:
 - `frontend/src/ui/App.jsx` - Added 6 new imports, 6 new routes, navbar Favorites link
 - `frontend/src/pages/ServiceDetail.jsx` - Updated addon rendering, added 6 feature buttons
-- `frontend/src/pages/OrderDetail.jsx` - Added warranty view button
 - `backend/main.py` - Added 3 new router imports and registrations
 - `backend/routers/services.py` - Updated to fetch ServiceAddon from database, added versions endpoint
 
@@ -287,9 +263,8 @@ The application now provides a complete demonstration of all schema features wit
 - ✅ Users can see service pricing history with demand trends
 - ✅ Users can check freelancer availability and book time slots
 - ✅ Users can view service version history and changelog
-- ✅ Users can file and track warranty claims on completed orders
 - ✅ Complete order lifecycle with disputes, messaging, and file attachments
-- ✅ Reviews, ratings, deliverables, and warranty guarantees fully integrated
+- ✅ Reviews, ratings, and deliverables fully integrated
 - ✅ Time tracking (schema complete), notifications, and analytics
 
 **Key Achievement**: The original user request "Make sure that all the stuff in schema.sql is visible" has been fully addressed. Every major table in the schema now has corresponding UI pages and/or visibility on detail pages.
