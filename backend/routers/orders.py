@@ -1,8 +1,11 @@
 from decimal import Decimal
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
 from datetime import datetime, timedelta
 import json
+from pathlib import Path
+import shutil
+import uuid
 
 from backend.db import get_connection
 
@@ -338,6 +341,117 @@ async def deliver_order(order_id: int, freelancer_id: int = Query(...)):
             return {"message": "Order delivered"}
 
 
+@router.post("/{order_id}/work/upload", status_code=201)
+async def upload_work(
+    order_id: int,
+    file: UploadFile = File(...),
+    freelancer_id: int = Query(...),
+    description: Optional[str] = Form(None),
+):
+    """Upload work/deliverable for an order. If status is revision_requested, this replaces the previous work."""
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify order belongs to freelancer and get status
+            await cur.execute(
+                'SELECT order_id, status FROM "Order" WHERE order_id = %s AND freelancer_id = %s',
+                (order_id, freelancer_id),
+            )
+            order_row = await cur.fetchone()
+            if not order_row:
+                raise HTTPException(status_code=403, detail="Order does not belong to freelancer")
+            
+            status = order_row[1]
+            
+            # Only allow work upload for orders that are in_progress or revision_requested
+            if status not in ("in_progress", "revision_requested"):
+                raise HTTPException(status_code=400, detail="Order status does not allow work upload")
+
+    # Validate file
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+    
+    # Size limit: 50MB
+    MAX_FILE_SIZE = 50 * 1024 * 1024
+    file.file.seek(0, 2)  # Seek to end
+    file_size = file.file.tell()
+    file.file.seek(0)  # Reset to beginning
+    
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large (max 50MB)")
+    
+    # Create order-specific directory
+    UPLOAD_DIR = Path("backend/uploads/work")
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    order_dir = UPLOAD_DIR / f"order_{order_id}"
+    order_dir.mkdir(parents=True, exist_ok=True)
+    
+    # For revisions, delete old work files and keep only the latest
+    if status == "revision_requested":
+        for old_file in order_dir.glob("*"):
+            if old_file.is_file():
+                old_file.unlink()
+    
+    # Generate unique filename
+    file_ext = Path(file.filename).suffix
+    unique_filename = f"{uuid.uuid4()}{file_ext}"
+    file_path = order_dir / unique_filename
+    
+    # Save file
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+    
+    # Return file metadata
+    relative_path = f"uploads/work/order_{order_id}/{unique_filename}"
+    
+    return {
+        "order_id": order_id,
+        "file_name": file.filename,
+        "file_path": relative_path,
+        "file_size": file_size,
+        "description": description or "",
+        "uploaded_at": datetime.now().isoformat()
+    }
+
+
+@router.get("/{order_id}/work")
+async def get_work_files(order_id: int, user_id: int = Query(...)):
+    """Get work files for an order (accessible to both client and freelancer)"""
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify user is part of the order
+            await cur.execute(
+                'SELECT client_id, freelancer_id FROM "Order" WHERE order_id = %s',
+                (order_id,),
+            )
+            order_row = await cur.fetchone()
+            if not order_row:
+                raise HTTPException(status_code=404, detail="Order not found")
+            
+            client_id, freelancer_id = order_row
+            if user_id not in (client_id, freelancer_id):
+                raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get work files from the directory
+    UPLOAD_DIR = Path("backend/uploads/work")
+    order_dir = UPLOAD_DIR / f"order_{order_id}"
+    
+    work_files = []
+    if order_dir.exists():
+        for file_path in sorted(order_dir.glob("*"), key=lambda p: p.stat().st_mtime, reverse=True):
+            if file_path.is_file():
+                work_files.append({
+                    "file_name": file_path.name,
+                    "file_path": f"uploads/work/order_{order_id}/{file_path.name}",
+                    "file_size": file_path.stat().st_size,
+                    "uploaded_at": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat()
+                })
+    
+    return {"order_id": order_id, "work_files": work_files}
+
+
 @router.patch("/{order_id}/cancel")
 async def cancel_order(order_id: int, client_id: int = Query(...)):
     """Client cancels an order"""
@@ -373,10 +487,9 @@ async def request_revision(order_id: int, revision: RevisionCreate, client_id: i
             # Verify order belongs to client + fetch revision policy
             await cur.execute(
                 '''
-                SELECT mo.client_id, o.revision_count, o.status, o.included_revision_limit, o.extra_revisions_purchased
-                FROM make_order mo
-                JOIN "Order" o ON mo.order_id = o.order_id
-                WHERE mo.order_id = %s
+                SELECT o.client_id, o.revision_count, o.status, o.included_revision_limit
+                FROM "Order" o
+                WHERE o.order_id = %s
                 ''',
                 (order_id,),
             )
@@ -386,20 +499,19 @@ async def request_revision(order_id: int, revision: RevisionCreate, client_id: i
             if row[0] != client_id:
                 raise HTTPException(status_code=403, detail="Order does not belong to client")
 
-            revision_count, status, included_limit, extra_purchased = row[1], row[2], row[3], row[4] or 0
+            revision_count, status, included_limit = row[1], row[2], row[3]
 
             # Disallow revisions on completed/cancelled orders
             if status in ("completed", "cancelled"):
                 raise HTTPException(status_code=400, detail="Order is closed; revisions are not allowed")
 
             if included_limit is not None:
-                allowed_total = max(0, included_limit + extra_purchased)
-                if revision_count >= allowed_total:
+                if revision_count >= included_limit:
                     raise HTTPException(
                         status_code=409,
                         detail=(
                             "Revision limit reached for this order. "
-                            f"Included: {included_limit}, extra purchased: {extra_purchased}, used: {revision_count}. "
+                            f"Included: {included_limit}, used: {revision_count}. "
                             "Purchase additional revisions to continue."
                         ),
                     )
@@ -411,8 +523,8 @@ async def request_revision(order_id: int, revision: RevisionCreate, client_id: i
                 SET status = %s,
                     revision_count = revision_count + 1
                 WHERE o.order_id = %s
-                                    AND o.status NOT IN ('completed', 'cancelled')
-                  AND (o.included_revision_limit IS NULL OR o.revision_count < o.included_revision_limit + o.extra_revisions_purchased)
+                  AND o.status NOT IN ('completed', 'cancelled')
+                  AND (o.included_revision_limit IS NULL OR o.revision_count < o.included_revision_limit)
                 RETURNING o.revision_count
                 ''',
                 ("revision_requested", order_id),
@@ -426,23 +538,10 @@ async def request_revision(order_id: int, revision: RevisionCreate, client_id: i
                 )
             revision_no = updated[0]
 
-            # Insert revision
-            await cur.execute(
-                'INSERT INTO "Revision" (revision_text, revision_no) VALUES (%s, %s) RETURNING revision_id',
-                (revision.revision_text, revision_no),
-            )
-            revision_id = (await cur.fetchone())[0]
-
-            # Link to client + order
-            await cur.execute(
-                'INSERT INTO request_revision (revision_id, client_id, order_id) VALUES (%s, %s, %s)',
-                (revision_id, client_id, order_id),
-            )
-
             await conn.commit()
 
             return RevisionPublic(
-                revision_id=revision_id,
+                revision_id=order_id,  # Use order_id as revision identifier
                 revision_text=revision.revision_text,
                 revision_no=revision_no,
                 order_id=order_id,
