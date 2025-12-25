@@ -31,7 +31,6 @@ import Seller from '../pages/Seller';
 import ServiceDetail from '../pages/ServiceDetail';
 import Services from '../pages/Services';
 import ServiceVersions from '../pages/ServiceVersions';
-import Warranty from '../pages/Warranty';
 import Withdrawals from '../pages/Withdrawals';
 import Workspace from '../pages/Workspace';
 import { ThemeModeContext } from './main';
@@ -117,7 +116,6 @@ function AppContent() {
                     <Route path="/portfolio/:freelancerId" element={requireAuth(<Portfolio />)} />
                     <Route path="/my-portfolio" element={requireAuth(<MyPortfolio />)} />
                     <Route path="/earnings" element={requireAuth(<Earnings />)} />
-                    <Route path="/warranty/:orderId" element={requireAuth(<Warranty />)} />
                     <Route path="/pricing-history/:serviceId" element={requireAuth(<PricingHistory />)} />
                     <Route path="/pricing-trends" element={requireAuth(<PricingTrends />)} />
                     <Route path="/service-versions/:serviceId" element={requireAuth(<ServiceVersions />)} />

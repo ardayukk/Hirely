@@ -13,7 +13,5 @@ with psycopg.connect(DSN) as conn:
         print('ServiceAddon:', cur.fetchone()[0])
         cur.execute('SELECT COUNT(*) FROM "AvailabilitySlot" WHERE is_booked = TRUE')
         print('Booked Slots:', cur.fetchone()[0])
-        cur.execute('SELECT COUNT(*) FROM "WarrantyClaim"')
-        print('WarrantyClaims:', cur.fetchone()[0])
         cur.execute('SELECT COUNT(*) FROM "TimeEntry" WHERE approved_by_client = TRUE')
         print('Approved TimeEntries:', cur.fetchone()[0])

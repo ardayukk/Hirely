@@ -364,7 +364,7 @@ export default function OrderDetail() {
         <Alert severity="error">{error || 'Order not found'}</Alert>
         <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
           <Button onClick={() => navigate('/orders')}>Back to Orders</Button>
-          <Button onClick={() => navigate(`/warranty/${orderId}`)}>View Warranty</Button>
+          { /* Warranty removed */ }
         </Box>
       </Container>
     );
@@ -693,11 +693,7 @@ export default function OrderDetail() {
               </Button>
             )}
 
-            {['completed', 'delivered'].includes(order.status) && (
-              <Button fullWidth variant="outlined" sx={{ mb: 1 }} onClick={() => navigate(`/warranty/${orderId}`)}>
-                View Warranty & Claims
-              </Button>
-            )}
+            {/* Warranty removed */}
 
             {isFreelancer && order.status === 'disputed' && (
               <Paper sx={{ p: 2, mb: 1, border: '2px solid', borderColor: 'warning.main' }}>

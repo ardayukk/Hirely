@@ -109,9 +109,9 @@ def seed_database():
         service_ids = []
         for title, category, desc, tier, price, days in services:
             cur.execute(
-                '''INSERT INTO "Service" (title, category, description, delivery_time, hourly_price, package_tier, status, average_rating)
-                   VALUES (%s, %s, %s, %s, %s, %s, 'ACTIVE', %s) RETURNING service_id''',
-                (title, category, desc, days, price, tier, 4.5),
+                '''INSERT INTO "Service" (freelancer_id, title, category, description, delivery_time, hourly_price, package_tier, status, average_rating)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, 'ACTIVE', %s) RETURNING service_id''',
+                (freelancer_id, title, category, desc, days, price, tier, 4.5),
             )
             service_id = cur.fetchone()[0]
             service_ids.append(service_id)
@@ -137,9 +137,9 @@ def seed_database():
             "details": "5 sections, responsive design, contact form integration"
         }
         cur.execute(
-            '''INSERT INTO "Order" (order_date, status, revision_count, included_revision_limit, extra_revisions_purchased, total_price, review_given, required_hours, requirements)
-               VALUES (NOW(), %s, %s, %s, %s, %s, %s, %s, %s) RETURNING order_id''',
-            ("pending", 0, 3, 0, 150.00, False, 20, json.dumps(requirements)),
+            '''INSERT INTO "Order" (client_id, freelancer_id, service_id, payment_id, status, total_price, requirements, revision_count, included_revision_limit, created_at)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW()) RETURNING order_id''',
+            (client_id, freelancer_id, service_ids[0], payment_id, "pending", 150.00, json.dumps(requirements), 0, 3),
         )
         order_id = cur.fetchone()[0]
         cur.execute(
@@ -150,17 +150,6 @@ def seed_database():
             'INSERT INTO finish_order (order_id, payment_id, freelancer_id) VALUES (%s, %s, %s)',
             (order_id, payment_id, freelancer_id),
         )
-        # Set delivery_date only if column exists (simplified schema removed SmallOrder)
-        try:
-            cur.execute(
-                'ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS delivery_date TIMESTAMPTZ'
-            )
-            cur.execute(
-                'UPDATE "Order" SET delivery_date = %s WHERE order_id = %s',
-                (datetime.now() + timedelta(days=7), order_id),
-            )
-        except Exception:
-            pass
         print(f"✅ Order created (ID: {order_id})")
         
         # 7. Create Messages/Chat
@@ -173,7 +162,7 @@ def seed_database():
         ]
         for sender_id, receiver_id, text, oid in messages:
             cur.execute(
-                'INSERT INTO "Messages" (sender_id, receiver_id, order_id, message_text, timestamp, is_read) VALUES (%s, %s, %s, %s, NOW(), FALSE) RETURNING message_id',
+                'INSERT INTO "Messages" (sender_id, receiver_id, order_id, message_text, is_read, created_at) VALUES (%s, %s, %s, %s, FALSE, NOW()) RETURNING message_id',
                 (sender_id, receiver_id, oid, text),
             )
             msg_id = cur.fetchone()[0]
@@ -190,8 +179,8 @@ def seed_database():
         # 8. Create Dispute
         print("⚖️  Creating sample dispute...")
         cur.execute(
-            'INSERT INTO "Dispute" (status, description, freelancer_response) VALUES (%s, %s, %s) RETURNING dispute_id',
-            ("RESOLVED", "The deliverable doesn't match the design mockup provided.", "I've revised the design based on your feedback. Please review the updated version."),
+            'INSERT INTO "Dispute" (order_id, client_id, admin_id, status, description, freelancer_response, opened_at) VALUES (%s, %s, %s, %s, %s, %s, NOW()) RETURNING dispute_id',
+            (order_id, client_id, admin_id, "RESOLVED", "The deliverable doesn't match the design mockup provided.", "I've revised the design based on your feedback. Please review the updated version."),
         )
         dispute_id = cur.fetchone()[0]
         cur.execute(
@@ -210,7 +199,7 @@ def seed_database():
         ]
         for user_id, notif_type, message in notifications:
             cur.execute(
-                'INSERT INTO "Notification" (user_id, type, message, date_sent, is_read) VALUES (%s, %s, %s, NOW(), FALSE)',
+                'INSERT INTO "Notification" (user_id, type, message, is_read, created_at) VALUES (%s, %s, %s, FALSE, NOW())',
                 (user_id, notif_type, message),
             )
         print(f"✅ Created {len(notifications)} notifications")

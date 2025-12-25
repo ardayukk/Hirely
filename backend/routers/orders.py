@@ -686,13 +686,12 @@ async def complete_order(order_id: int, client_id: int = Query(...)):
     """Client accepts delivery and marks order as completed"""
     async with get_connection() as conn:
         async with conn.cursor() as cur:
+            # Get order details
             await cur.execute(
                 '''
-                SELECT mo.client_id, fo.freelancer_id, p.payment_id, p.amount, p.released
-                FROM make_order mo
-                JOIN finish_order fo ON mo.order_id = fo.order_id
-                JOIN "Payment" p ON fo.payment_id = p.payment_id
-                WHERE mo.order_id = %s
+                SELECT client_id, freelancer_id, payment_id
+                FROM "Order"
+                WHERE order_id = %s
                 ''',
                 (order_id,),
             )
@@ -700,18 +699,24 @@ async def complete_order(order_id: int, client_id: int = Query(...)):
             if not row or row[0] != client_id:
                 raise HTTPException(status_code=403, detail="Order does not belong to client")
 
-            _, freelancer_id, payment_id, amount, released = row
+            _, freelancer_id, payment_id = row
 
             # Mark order completed
             await cur.execute('UPDATE "Order" SET status = %s WHERE order_id = %s', ("completed", order_id))
 
-            # Release payment only once
-            if not released:
-                await cur.execute('UPDATE "Payment" SET released = TRUE, payment_date = NOW() WHERE payment_id = %s', (payment_id,))
-                await cur.execute(
-                    'UPDATE "NonAdmin" SET wallet_balance = COALESCE(wallet_balance, 0) + %s WHERE user_id = %s',
-                    (amount, freelancer_id),
-                )
+            # Release payment only once if it exists
+            if payment_id:
+                await cur.execute('SELECT released_amount, amount FROM "Payment" WHERE payment_id = %s', (payment_id,))
+                payment_row = await cur.fetchone()
+                if payment_row:
+                    released_amount, amount = payment_row
+                    # Only release if not already released
+                    if released_amount == 0:
+                        await cur.execute('UPDATE "Payment" SET released_amount = %s, status = %s WHERE payment_id = %s', (amount, "RELEASED", payment_id,))
+                        await cur.execute(
+                            'UPDATE "NonAdmin" SET wallet_balance = COALESCE(wallet_balance, 0) + %s WHERE user_id = %s',
+                            (amount, freelancer_id),
+                        )
 
             await conn.commit()
             return {"message": "Order completed and payment released"}
@@ -725,11 +730,9 @@ async def create_review(order_id: int, review: ReviewCreate, client_id: int = Qu
             # Verify order belongs to client and is completed
             await cur.execute(
                 '''
-                SELECT mo.client_id, mo.service_id, o.status, fo.freelancer_id
-                FROM make_order mo
-                JOIN "Order" o ON mo.order_id = o.order_id
-                LEFT JOIN finish_order fo ON o.order_id = fo.order_id
-                WHERE mo.order_id = %s
+                SELECT client_id, service_id, status, freelancer_id
+                FROM "Order"
+                WHERE order_id = %s
                 ''',
                 (order_id,),
             )
@@ -744,69 +747,10 @@ async def create_review(order_id: int, review: ReviewCreate, client_id: int = Qu
 
             # Insert review
             await cur.execute(
-                'INSERT INTO "Review" (rating, comment, highlights, client_id) VALUES (%s, %s, %s, %s) RETURNING review_id',
-                (review.rating, review.comment, review.highlights, client_id),
+                'INSERT INTO "Review" (order_id, client_id, freelancer_id, rating, comment, highlights) VALUES (%s, %s, %s, %s, %s, %s) RETURNING review_id',
+                (order_id, client_id, freelancer_id, review.rating, review.comment, review.highlights),
             )
             review_id = (await cur.fetchone())[0]
-
-            # Link review to service via give_review
-            await cur.execute(
-                'INSERT INTO give_review (user_id, review_id, service_id) VALUES (%s, %s, %s)',
-                (client_id, review_id, service_id),
-            )
-
-            # Mark order as reviewed
-            await cur.execute(
-                'UPDATE "Order" SET review_given = TRUE WHERE order_id = %s',
-                (order_id,),
-            )
-
-            # Update freelancer rating via Update_Rating
-            if freelancer_id:
-                await cur.execute(
-                    'INSERT INTO "Update_Rating" (review_id, freelancer_id) VALUES (%s, %s)',
-                    (review_id, freelancer_id),
-                )
-
-                # Recompute freelancer stats
-                await cur.execute(
-                    '''
-                    UPDATE "Freelancer" f
-                    SET avg_rating = (
-                            SELECT AVG(r.rating)
-                            FROM "Update_Rating" ur
-                            JOIN "Review" r ON ur.review_id = r.review_id
-                            WHERE ur.freelancer_id = f.user_id
-                        ),
-                        total_reviews = (
-                            SELECT COUNT(*)
-                            FROM "Update_Rating" ur
-                            WHERE ur.freelancer_id = f.user_id
-                        ),
-                        total_orders = (
-                            SELECT COUNT(*)
-                            FROM finish_order fo
-                            WHERE fo.freelancer_id = f.user_id
-                        )
-                    WHERE f.user_id = %s
-                    ''',
-                    (freelancer_id,),
-                )
-
-            # Update service average rating
-            await cur.execute(
-                '''
-                UPDATE "Service" s
-                SET average_rating = (
-                    SELECT AVG(r.rating)
-                    FROM give_review gr
-                    JOIN "Review" r ON gr.review_id = r.review_id
-                    WHERE gr.service_id = s.service_id
-                )
-                WHERE s.service_id = %s
-                ''',
-                (service_id,),
-            )
 
             await conn.commit()
 

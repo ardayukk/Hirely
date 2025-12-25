@@ -223,30 +223,7 @@ CREATE TABLE IF NOT EXISTS "PricingHistory" (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================
--- NOVEL EXTRA FEATURE: Service Warranty/Guarantee System
--- ============================================
-
-CREATE TABLE IF NOT EXISTS "ServiceWarranty" (
-    warranty_id SERIAL,
-    service_id INTEGER NOT NULL,
-    duration_days INTEGER NOT NULL,
-    description TEXT NOT NULL,
-    terms TEXT,
-    active BOOLEAN DEFAULT TRUE
-);
-
-CREATE TABLE IF NOT EXISTS "WarrantyClaim" (
-    claim_id SERIAL,
-    warranty_id INTEGER NOT NULL,
-    order_id INTEGER NOT NULL,
-    client_id INTEGER NOT NULL,
-    description TEXT NOT NULL,
-    status TEXT DEFAULT 'open',
-    filed_at TIMESTAMPTZ DEFAULT NOW(),
-    resolved_at TIMESTAMPTZ,
-    resolution_notes TEXT
-);
+-- (Removed) Service Warranty/Guarantee System
 
 -- ============================================
 -- NOVEL EXTRA FEATURE: Time Tracking for Hourly Projects

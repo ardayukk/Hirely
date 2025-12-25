@@ -42,6 +42,12 @@ async def open_dispute(payload: DisputeCreate, client_id: int = Query(...)):
                     (dispute_id, client_id, payload.order_id),
                 )
 
+                # Mark the order as disputed so UI updates accordingly
+                await cur.execute(
+                    'UPDATE "Order" SET status = %s WHERE order_id = %s',
+                    ('disputed', payload.order_id),
+                )
+
                 await conn.commit()
 
                 return DisputePublic(
@@ -69,7 +75,7 @@ async def list_disputes(status: Optional[str] = Query(None)):
         async with get_connection() as conn:
             async with conn.cursor() as cur:
                 query = '''
-                    SELECT d.dispute_id, d.status, d.decision, d.resolution_date,
+                    SELECT d.dispute_id, d.status, d.resolution_message AS decision, d.resolved_at AS resolution_date,
                            r.order_id, r.client_id, r.admin_id,
                            nac.name AS client_name,
                            a.username AS admin_name,
@@ -146,16 +152,16 @@ async def _get_dispute(dispute_id: int) -> DisputePublic:
         async with conn.cursor() as cur:
             await cur.execute(
                 '''
-                SELECT d.dispute_id, d.status, d.decision, d.resolution_date,
+                  SELECT d.dispute_id, d.status, d.resolution_message AS decision, d.resolved_at AS resolution_date,
                        r.order_id, r.client_id, r.admin_id,
                        nac.name AS client_name,
-                       naadmin.name AS admin_name,
+                      a.username AS admin_name,
                        d.freelancer_response, d.freelancer_response_at,
                        d.description
                 FROM "Dispute" d
                 JOIN reported r ON d.dispute_id = r.dispute_id
                 JOIN "NonAdmin" nac ON r.client_id = nac.user_id
-                LEFT JOIN "NonAdmin" naadmin ON r.admin_id = naadmin.user_id
+                  LEFT JOIN "Admin" a ON r.admin_id = a.user_id
                 WHERE d.dispute_id = %s
                 ''',
                 (dispute_id,),
@@ -198,7 +204,7 @@ async def resolve_dispute(dispute_id: int, payload: DisputeResolve, admin_id: in
                 )
 
                 await cur.execute(
-                    'UPDATE "Dispute" SET decision = %s, status = %s, resolution_date = NOW() WHERE dispute_id = %s',
+                    'UPDATE "Dispute" SET resolution_message = %s, status = %s, resolved_at = NOW() WHERE dispute_id = %s',
                     (payload.decision, 'RESOLVED', dispute_id),
                 )
 
@@ -221,16 +227,16 @@ async def resolve_dispute(dispute_id: int, payload: DisputeResolve, admin_id: in
                 # Fetch updated dispute within the transaction before returning
                 await cur.execute(
                     '''
-                    SELECT d.dispute_id, d.status, d.decision, d.resolution_date,
+                          SELECT d.dispute_id, d.status, d.resolution_message AS decision, d.resolved_at AS resolution_date,
                            r.order_id, r.client_id, r.admin_id,
                            nac.name AS client_name,
-                           naadmin.name AS admin_name,
+                              a.username AS admin_name,
                            d.freelancer_response, d.freelancer_response_at,
                            d.description
                     FROM "Dispute" d
                     JOIN reported r ON d.dispute_id = r.dispute_id
                     JOIN "NonAdmin" nac ON r.client_id = nac.user_id
-                    LEFT JOIN "NonAdmin" naadmin ON r.admin_id = naadmin.user_id
+                          LEFT JOIN "Admin" a ON r.admin_id = a.user_id
                     WHERE d.dispute_id = %s
                     ''',
                     (dispute_id,),
@@ -285,7 +291,7 @@ async def add_dispute_note(dispute_id: int, admin_id: int = Query(...), note: st
                 # Store note (would need a dispute_notes table in production)
                 # For now, we can append to decision field or create new table
                 await cur.execute(
-                    'UPDATE "Dispute" SET decision = CONCAT(decision, "\n[Admin Note]: " || %s) WHERE dispute_id = %s',
+                    'UPDATE "Dispute" SET admin_notes = COALESCE(admin_notes, \'\') || E"\n[Admin Note]: " || %s WHERE dispute_id = %s',
                     (note, dispute_id),
                 )
                 await conn.commit()
@@ -307,10 +313,10 @@ async def add_freelancer_response(dispute_id: int, payload: FreelancerResponseCr
             try:
                 # Get order and verify freelancer
                 await cur.execute(
-                    '''SELECT r.order_id, fo.freelancer_id
+                    '''SELECT r.order_id, o.freelancer_id
                        FROM "Dispute" d
                        JOIN reported r ON d.dispute_id = r.dispute_id
-                       JOIN finish_order fo ON r.order_id = fo.order_id
+                       JOIN "Order" o ON r.order_id = o.order_id
                        WHERE d.dispute_id = %s''',
                     (dispute_id,),
                 )
