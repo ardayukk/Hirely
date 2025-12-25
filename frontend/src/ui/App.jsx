@@ -10,6 +10,7 @@ import Admin from '../pages/AdminDisputes';
 import Checkout from '../pages/Checkout';
 import ClientWorkspace from '../pages/Client';
 import CreateService from '../pages/CreateService';
+import Earnings from '../pages/Earnings';
 import EditService from '../pages/EditService';
 import Favorites from '../pages/Favorites';
 import Home from '../pages/Home';
@@ -23,6 +24,7 @@ import OrderDetail from '../pages/OrderDetail';
 import Orders from '../pages/Orders';
 import Portfolio from '../pages/Portfolio';
 import PricingHistory from '../pages/PricingHistory';
+import PricingTrends from '../pages/PricingTrends';
 import Profile from '../pages/Profile';
 import Register from '../pages/Register';
 import Seller from '../pages/Seller';
@@ -78,6 +80,7 @@ function AppContent() {
                             <Button component={Link} to="/services" variant="text">Services</Button>
                             {user?.role === 'client' && <Button component={Link} to="/favorites">Favorites</Button>}
                             {user?.role === 'freelancer' && <Button component={Link} to="/my-portfolio">My Portfolio</Button>}
+                            {user?.role === 'freelancer' && <Button component={Link} to="/earnings">Earnings</Button>}
                             <Button component={Link} to="/profile">Profile</Button>
                             <Button onClick={handleLogout}>Logout</Button>
                             <ThemeToggle />
@@ -112,8 +115,9 @@ function AppContent() {
                     <Route path="/favorites" element={requireAuth(<Favorites />)} />
                     <Route path="/portfolio/:freelancerId" element={requireAuth(<Portfolio />)} />
                     <Route path="/my-portfolio" element={requireAuth(<MyPortfolio />)} />
-                    { /* Warranty route removed */ }
+                    <Route path="/earnings" element={requireAuth(<Earnings />)} />
                     <Route path="/pricing-history/:serviceId" element={requireAuth(<PricingHistory />)} />
+                    <Route path="/pricing-trends" element={requireAuth(<PricingTrends />)} />
                     <Route path="/service-versions/:serviceId" element={requireAuth(<ServiceVersions />)} />
                     <Route path="/withdrawals" element={requireAuth(<Withdrawals />)} />
                     <Route path="/logout" element={<Logout />} />

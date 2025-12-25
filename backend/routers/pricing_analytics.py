@@ -80,22 +80,39 @@ async def get_pricing_summary():
 async def get_category_trends(
     granularity: str = Query("month", pattern="^(day|week|month)$"),
 ):
-    """Get average prices per category over time"""
+    """Get average prices per category over time (based on Order history)"""
     try:
         async with get_connection() as conn:
             async with conn.cursor() as cur:
+                # Use Order table to get historical pricing trends
                 await cur.execute('''
                     SELECT 
-                        category,
-                        TO_CHAR(date_trunc(%s, COALESCE(updated_at, NOW())), 'YYYY-MM-DD') AS period,
-                        AVG(hourly_price) AS avg_price,
+                        s.category,
+                        TO_CHAR(date_trunc(%s, o.created_at), 'YYYY-MM-DD') AS period,
+                        AVG(o.total_price) AS avg_price,
                         COUNT(*) AS service_count
-                    FROM "Service"
-                    WHERE hourly_price IS NOT NULL AND hourly_price > 0
-                    GROUP BY category, date_trunc(%s, COALESCE(updated_at, NOW()))
-                    ORDER BY period, category
+                    FROM "Order" o
+                    JOIN "Service" s ON o.service_id = s.service_id
+                    WHERE o.total_price IS NOT NULL AND o.total_price > 0
+                    GROUP BY s.category, date_trunc(%s, o.created_at)
+                    ORDER BY period, s.category
                 ''', (granularity, granularity))
                 rows = await cur.fetchall()
+
+                # If no orders, fallback to current service prices (snapshot)
+                if not rows:
+                    await cur.execute('''
+                        SELECT 
+                            category,
+                            TO_CHAR(date_trunc(%s, COALESCE(updated_at, NOW())), 'YYYY-MM-DD') AS period,
+                            AVG(hourly_price) AS avg_price,
+                            COUNT(*) AS service_count
+                        FROM "Service"
+                        WHERE hourly_price IS NOT NULL AND hourly_price > 0
+                        GROUP BY category, date_trunc(%s, COALESCE(updated_at, NOW()))
+                        ORDER BY period, category
+                    ''', (granularity, granularity))
+                    rows = await cur.fetchall()
 
                 return [
                     CategoryTrendPoint(
@@ -156,10 +173,12 @@ async def get_price_demand_correlation():
                         s.title,
                         s.hourly_price,
                         s.category,
-                        0 AS order_count,
-                        0 AS revenue
+                        COUNT(o.order_id) AS order_count,
+                        COALESCE(SUM(o.total_price), 0) AS revenue
                     FROM "Service" s
+                    LEFT JOIN "Order" o ON s.service_id = o.service_id
                     WHERE s.hourly_price IS NOT NULL AND s.hourly_price > 0
+                    GROUP BY s.service_id, s.title, s.hourly_price, s.category
                     ORDER BY s.hourly_price DESC
                     LIMIT 100
                 ''')
