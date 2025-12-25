@@ -185,15 +185,15 @@ export default function OrderDetail() {
       }
       await axiosInstance.post(`/api/orders/${orderId}/work/upload?freelancer_id=${user.id}`, form);
 
-      // Then mark the order as delivered
-      await axiosInstance.patch(`/api/orders/${orderId}/deliver?freelancer_id=${user.id}`);
+      // Then mark the order as delivered (or advance milestone for big orders)
+      const deliverRes = await axiosInstance.patch(`/api/orders/${orderId}/deliver?freelancer_id=${user.id}`);
 
       await fetchOrder();
       await loadMessages();
       await loadWorkFiles(); // Reload work files to show the delivery
       setDeliveryFile(null);
       setDeliveryNote('');
-      alert('Order marked as delivered');
+      alert(deliverRes.data?.message || 'Work submitted successfully');
     } catch (err) {
       let detail = 'Failed to deliver order';
       if (err.response?.data?.detail) {
@@ -328,12 +328,9 @@ export default function OrderDetail() {
     try {
       setDisputeResponseLoading(true);
       setDisputeResponseError('');
-      // Find dispute_id for this order
-      const disputesRes = await axiosInstance.get('/api/disputes');
-      const dispute = disputesRes.data?.find(d => d.order_id === Number(orderId));
-      if (!dispute) {
-        throw new Error('Dispute not found');
-      }
+      // Fetch dispute for this order
+      const disputeRes = await axiosInstance.get(`/api/disputes/order/${orderId}`);
+      const dispute = disputeRes.data;
       await axiosInstance.post(
         `/api/disputes/${dispute.dispute_id}/freelancer-response?freelancer_id=${user.id}`,
         { response: disputeResponse }
@@ -414,25 +411,139 @@ export default function OrderDetail() {
 
             {order.is_big_order && (
               <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" color="text.secondary">Milestones</Typography>
-                <Typography variant="body1">
-                  Phase {order.current_phase} of {order.milestone_count}
+                <Typography variant="body2" color="text.secondary">Big Order Progress</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                  <Typography variant="body1" fontWeight="bold">
+                    Milestone {order.current_phase} of {order.milestone_count}
+                  </Typography>
+                  <Chip 
+                    size="small" 
+                    label={`${Math.min(100, Math.round((order.current_phase / order.milestone_count) * 100))}%`}
+                    color={order.current_phase >= order.milestone_count ? 'success' : 'primary'}
+                  />
+                </Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  {order.current_phase >= order.milestone_count 
+                    ? 'All milestones submitted - awaiting client approval' 
+                    : `${order.milestone_count - order.current_phase} milestone(s) remaining`}
                 </Typography>
                 <Box sx={{ mt: 2 }}>
-                  <Typography variant="subtitle2">Deliverables</Typography>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Phase Submissions</Typography>
                   {loadingDeliverables ? (
                     <CircularProgress size={20} sx={{ mt: 1 }} />
                   ) : deliverables.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">No deliverables yet.</Typography>
+                    <Typography variant="body2" color="text.secondary">No submissions yet.</Typography>
                   ) : (
-                    deliverables.map((d) => (
-                      <Box key={d.deliverable_id} sx={{ py: 1 }}>
-                        <Typography variant="body2">#{d.deliverable_id}: {d.description}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Due: {d.due_date ? new Date(d.due_date).toLocaleString() : 'N/A'} | Status: {d.status}
-                        </Typography>
-                      </Box>
-                    ))
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {deliverables.map((d, idx) => {
+                        const isPendingReview = d.status === 'submitted' && idx === deliverables.length - 1 && isClient;
+                        const statusColor = d.status === 'approved' ? 'success' : d.status === 'rejected' ? 'error' : 'info';
+                        
+                        return (
+                          <Paper
+                            key={d.deliverable_id}
+                            sx={{
+                              p: 2.5,
+                              border: '2px solid',
+                              borderColor: isPendingReview ? 'warning.main' : d.status === 'approved' ? 'success.light' : d.status === 'rejected' ? 'error.light' : 'grey.300',
+                              borderRadius: 1,
+                              backgroundColor: isPendingReview ? 'rgba(255, 193, 7, 0.08)' : d.status === 'approved' ? 'rgba(76, 175, 80, 0.05)' : d.status === 'rejected' ? 'rgba(244, 67, 54, 0.05)' : 'transparent',
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Chip
+                                  size="small"
+                                  label={`Phase ${d.phase_number || 'N/A'}`}
+                                  color={statusColor}
+                                  variant={isPendingReview ? 'filled' : 'outlined'}
+                                />
+                                <Chip
+                                  size="small"
+                                  label={d.status.charAt(0).toUpperCase() + d.status.slice(1)}
+                                  variant="outlined"
+                                />
+                              </Box>
+                              <Typography variant="caption" color="text.secondary">
+                                {d.submitted_at ? new Date(d.submitted_at).toLocaleDateString() : 'Pending'}
+                              </Typography>
+                            </Box>
+                            
+                            {d.description && (
+                              <Box sx={{ mb: 2, p: 1.5, backgroundColor: '#f9f9f9', borderRadius: 0.5, borderLeft: '3px solid', borderLeftColor: 'primary.main' }}>
+                                <Typography variant="caption" display="block" sx={{ mb: 0.5, fontWeight: 600, color: 'text.secondary' }}>
+                                  Freelancer's Note:
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                                  "{d.description}"
+                                </Typography>
+                              </Box>
+                            )}
+                            
+                            {d.file_url && (
+                              <Box sx={{ mb: 2, p: 1.5, backgroundColor: '#f0f7ff', borderRadius: 0.5, border: '1px solid #90caf9' }}>
+                                <Typography variant="caption" display="block" sx={{ mb: 0.75, fontWeight: 600, color: 'text.secondary' }}>
+                                  📎 Submitted File:
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: 'primary.main',
+                                    textDecoration: 'underline',
+                                    cursor: 'pointer',
+                                    wordBreak: 'break-word',
+                                  }}
+                                  component="a"
+                                  href={`http://localhost:8000/${d.file_url}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download
+                                >
+                                  {d.file_url.split('/').pop()}
+                                </Typography>
+                              </Box>
+                            )}
+                            
+                            {isPendingReview && (
+                              <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                                <Button
+                                  variant="contained"
+                                  color="success"
+                                  fullWidth
+                                  onClick={async () => {
+                                    try {
+                                      await axiosInstance.patch(`/api/orders/${orderId}/phase-review/accept?client_id=${user.id}`);
+                                      await fetchOrder();
+                                      alert('Phase accepted. Freelancer can now submit the next phase.');
+                                    } catch (err) {
+                                      alert(err.response?.data?.detail || 'Failed to accept phase');
+                                    }
+                                  }}
+                                >
+                                  ✓ Accept
+                                </Button>
+                                <Button
+                                  variant="contained"
+                                  color="error"
+                                  fullWidth
+                                  onClick={async () => {
+                                    try {
+                                      await axiosInstance.patch(`/api/orders/${orderId}/phase-review/decline?client_id=${user.id}`);
+                                      await fetchOrder();
+                                      alert('Phase declined. Freelancer will need to re-submit.');
+                                    } catch (err) {
+                                      alert(err.response?.data?.detail || 'Failed to decline phase');
+                                    }
+                                  }}
+                                >
+                                  ✗ Decline
+                                </Button>
+                              </Box>
+                            )}
+                          </Paper>
+                        );
+                      })}
+                    </Box>
                   )}
                 </Box>
               </Box>
@@ -469,7 +580,15 @@ export default function OrderDetail() {
             {isFreelancer && order.status === 'in_progress' && (
               <>
                 <Box sx={{ border: '1px dashed', borderColor: 'grey.400', borderRadius: 1, p: 2, mb: 1 }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Attach final delivery</Typography>
+                  {order.is_big_order && (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      <strong>Milestone {order.current_phase} of {order.milestone_count}</strong><br/>
+                      Submit work for this phase. You'll need to deliver {order.milestone_count} times total.
+                    </Alert>
+                  )}
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    {order.is_big_order ? `Submit Milestone ${order.current_phase}` : 'Attach final delivery'}
+                  </Typography>
                   <Button
                     variant="outlined"
                     component="label"
@@ -502,7 +621,7 @@ export default function OrderDetail() {
                     onClick={handleDeliver}
                     disabled={deliverySending}
                   >
-                    {deliverySending ? 'Uploading...' : 'Upload & Mark as Delivered'}
+                    {deliverySending ? 'Uploading...' : (order.is_big_order ? `Submit Milestone ${order.current_phase}` : 'Upload & Mark as Delivered')}
                   </Button>
                   {deliveryError && (
                     <Alert severity="error" sx={{ mt: 1 }}>{deliveryError}</Alert>

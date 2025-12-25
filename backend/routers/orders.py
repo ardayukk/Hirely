@@ -323,7 +323,7 @@ async def accept_order(order_id: int, freelancer_id: int = Query(...)):
 
 @router.patch("/{order_id}/deliver")
 async def deliver_order(order_id: int, freelancer_id: int = Query(...)):
-    """Freelancer marks order as delivered"""
+    """Freelancer uploads work. For big orders, phase does NOT auto-advance - client must accept"""
     async with get_connection() as conn:
         async with conn.cursor() as cur:
             # Verify order belongs to freelancer and check current status
@@ -338,30 +338,27 @@ async def deliver_order(order_id: int, freelancer_id: int = Query(...)):
             row = await cur.fetchone()
             if not row:
                 raise HTTPException(status_code=403, detail="Order does not belong to freelancer")
-            
-            current_status, revision_count, included_limit = row[1], row[2], row[3]
-            
-            # Check if this is a revision delivery and if limits are exceeded
-            if current_status == "revision_requested":
-                if included_limit is not None:
-                    if revision_count > included_limit:
-                        raise HTTPException(
-                            status_code=400, 
-                            detail=f"Cannot deliver: revision limit exceeded ({revision_count}/{included_limit}). Client must purchase additional revisions."
-                        )
-                # Mark revision as resolved by updating status to delivered
-                await cur.execute(
-                    'UPDATE "Order" SET status = %s WHERE order_id = %s',
-                    ("delivered", order_id),
-                )
+
+            # Check if this is a big order
+            await cur.execute(
+                'SELECT milestone_count, current_phase FROM "BigOrder" WHERE order_id = %s',
+                (order_id,),
+            )
+            big_order = await cur.fetchone()
+
+            if big_order:
+                # Big order: just report that work was submitted, client must accept to advance
+                milestone_count, current_phase = big_order
+                message = f"Milestone {current_phase} submitted. Waiting for client acceptance to advance to phase {current_phase + 1}."
             else:
-                # For non-revision deliveries, just mark as delivered
+                # Small order: mark as delivered immediately
                 await cur.execute(
                     'UPDATE "Order" SET status = %s WHERE order_id = %s',
                     ("delivered", order_id),
                 )
+                message = "Order delivered"
             await conn.commit()
-            return {"message": "Order delivered"}
+            return {"message": message}
 
 
 @router.post("/{order_id}/work/upload", status_code=201)
@@ -389,15 +386,7 @@ async def upload_work(
             
             # Only allow work upload for orders that are in_progress or revision_requested
             if status not in ("in_progress", "revision_requested"):
-                raise HTTPException(status_code=400, detail=f"Order status '{status}' does not allow work upload")
-            
-            # For revision_requested status, check if revision limit allows more work
-            if status == "revision_requested" and included_limit is not None:
-                if revision_count > included_limit:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Revision limit exceeded ({revision_count}/{included_limit}). Cannot upload more work."
-                    )
+                raise HTTPException(status_code=400, detail="Order status does not allow work upload")
 
     # Validate file
     if not file.filename:
@@ -436,21 +425,12 @@ async def upload_work(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
     
-    # Return file metadata
+    # Store deliverable record with file path and phase info
     relative_path = f"uploads/work/order_{order_id}/{unique_filename}"
-    
-    # If this was a revision upload, update status to indicate work is ready for delivery
-    if status == "revision_requested":
-        async with get_connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    'UPDATE "Order" SET status = %s WHERE order_id = %s',
-                    ("in_progress", order_id),
-                )
-                await conn.commit()
     
     return {
         "order_id": order_id,
+        "phase_number": phase_number,
         "file_name": file.filename,
         "file_path": relative_path,
         "file_size": file_size,
@@ -720,6 +700,120 @@ async def complete_order(order_id: int, client_id: int = Query(...)):
 
             await conn.commit()
             return {"message": "Order completed and payment released"}
+
+
+@router.patch("/{order_id}/phase-review/accept")
+async def accept_phase_submission(order_id: int, client_id: int = Query(...)):
+    """Client accepts a phase submission and advances to next phase"""
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify order belongs to client
+            await cur.execute(
+                'SELECT client_id, status FROM "Order" WHERE order_id = %s',
+                (order_id,),
+            )
+            order_row = await cur.fetchone()
+            if not order_row or order_row[0] != client_id:
+                raise HTTPException(status_code=403, detail="Order does not belong to client")
+            
+            # Check if this is a big order
+            await cur.execute(
+                'SELECT milestone_count, current_phase FROM "BigOrder" WHERE order_id = %s',
+                (order_id,),
+            )
+            big_order = await cur.fetchone()
+            if not big_order:
+                raise HTTPException(status_code=400, detail="Not a big order")
+            
+            milestone_count, current_phase = big_order
+            
+            # Get the most recent submitted deliverable for current phase
+            await cur.execute(
+                '''
+                SELECT deliverable_id FROM "Deliverable"
+                WHERE order_id = %s AND phase_number = %s AND status = 'submitted'
+                ORDER BY submitted_at DESC LIMIT 1
+                ''',
+                (order_id, current_phase),
+            )
+            deliverable = await cur.fetchone()
+            if not deliverable:
+                raise HTTPException(status_code=400, detail="No submitted work found for this phase")
+            
+            # Mark deliverable as approved
+            await cur.execute(
+                'UPDATE "Deliverable" SET status = %s WHERE deliverable_id = %s',
+                ('approved', deliverable[0]),
+            )
+            
+            # Advance to next phase
+            if current_phase < milestone_count:
+                await cur.execute(
+                    'UPDATE "BigOrder" SET current_phase = %s WHERE order_id = %s',
+                    (current_phase + 1, order_id),
+                )
+                message = f"Phase {current_phase} approved. Freelancer can now submit phase {current_phase + 1}."
+            else:
+                # All milestones complete, mark order as delivered
+                await cur.execute(
+                    'UPDATE "Order" SET status = %s WHERE order_id = %s',
+                    ('delivered', order_id),
+                )
+                message = "All phases approved. Order marked as delivered."
+            
+            await conn.commit()
+            return {"message": message}
+
+
+@router.patch("/{order_id}/phase-review/decline")
+async def decline_phase_submission(order_id: int, client_id: int = Query(...)):
+    """Client declines a phase submission, freelancer must re-upload"""
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            # Verify order belongs to client
+            await cur.execute(
+                'SELECT client_id FROM "Order" WHERE order_id = %s',
+                (order_id,),
+            )
+            order_row = await cur.fetchone()
+            if not order_row or order_row[0] != client_id:
+                raise HTTPException(status_code=403, detail="Order does not belong to client")
+            
+            # Check if this is a big order
+            await cur.execute(
+                'SELECT milestone_count, current_phase FROM "BigOrder" WHERE order_id = %s',
+                (order_id,),
+            )
+            big_order = await cur.fetchone()
+            if not big_order:
+                raise HTTPException(status_code=400, detail="Not a big order")
+            
+            milestone_count, current_phase = big_order
+            
+            # Get the most recent submitted deliverable for current phase
+            await cur.execute(
+                '''
+                SELECT deliverable_id FROM "Deliverable"
+                WHERE order_id = %s AND phase_number = %s AND status = 'submitted'
+                ORDER BY submitted_at DESC LIMIT 1
+                ''',
+                (order_id, current_phase),
+            )
+            deliverable = await cur.fetchone()
+            if not deliverable:
+                raise HTTPException(status_code=400, detail="No submitted work found for this phase")
+            
+            # Mark deliverable as rejected
+            await cur.execute(
+                'UPDATE "Deliverable" SET status = %s WHERE deliverable_id = %s',
+                ('rejected', deliverable[0]),
+            )
+            
+            # Phase stays the same, freelancer must re-upload
+            message = f"Phase {current_phase} declined. Freelancer needs to re-upload work for this phase."
+            
+            await conn.commit()
+            return {"message": message}
 
 
 @router.post("/{order_id}/review", response_model=ReviewPublic, status_code=201)

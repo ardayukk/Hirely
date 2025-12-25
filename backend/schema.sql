@@ -331,11 +331,12 @@ CREATE TABLE IF NOT EXISTS "Dispute" (
     description TEXT NOT NULL,
     status TEXT DEFAULT 'OPEN',
     freelancer_response TEXT,
+    freelancer_response_at TIMESTAMPTZ,
     admin_notes TEXT,
     resolution_message TEXT,
     opened_at TIMESTAMPTZ DEFAULT NOW(),
     resolved_at TIMESTAMPTZ,
-    freelancer_response_at TIMESTAMPTZ
+    -- legacy column list ended here; keep ordering for readability
 );
 
 CREATE TABLE IF NOT EXISTS "DisputeEvidence" (
@@ -427,7 +428,7 @@ DO $$ BEGIN ALTER TABLE "User" ADD CONSTRAINT user_email_uq UNIQUE (email); EXCE
 
 -- Check Constraints (keep a small representative set)
 DO $$ BEGIN ALTER TABLE "User" ADD CONSTRAINT user_role_check CHECK (role IN ('admin', 'client', 'freelancer')); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN ALTER TABLE "Order" ADD CONSTRAINT order_status_check CHECK (status IN ('pending', 'accepted', 'in_progress', 'delivered', 'revision_requested', 'completed', 'cancelled')); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Order" ADD CONSTRAINT order_status_check CHECK (status IN ('pending', 'accepted', 'in_progress', 'delivered', 'revision_requested', 'completed', 'cancelled', 'disputed')); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Foreign Keys (core relationships only)
 DO $$ BEGIN ALTER TABLE "NonAdmin" ADD CONSTRAINT nonadmin_user_fk FOREIGN KEY (user_id) REFERENCES "User"(user_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
