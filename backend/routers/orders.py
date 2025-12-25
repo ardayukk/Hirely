@@ -304,7 +304,7 @@ async def accept_order(order_id: int, freelancer_id: int = Query(...)):
         async with conn.cursor() as cur:
             # Verify order belongs to freelancer
             await cur.execute(
-                'SELECT order_id FROM finish_order WHERE order_id = %s AND freelancer_id = %s',
+                'SELECT order_id FROM "Order" WHERE order_id = %s AND freelancer_id = %s',
                 (order_id, freelancer_id),
             )
             if not await cur.fetchone():
@@ -324,7 +324,7 @@ async def deliver_order(order_id: int, freelancer_id: int = Query(...)):
     async with get_connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
-                'SELECT order_id FROM finish_order WHERE order_id = %s AND freelancer_id = %s',
+                'SELECT order_id FROM "Order" WHERE order_id = %s AND freelancer_id = %s',
                 (order_id, freelancer_id),
             )
             if not await cur.fetchone():
