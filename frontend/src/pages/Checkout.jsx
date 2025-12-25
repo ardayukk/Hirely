@@ -24,7 +24,7 @@ export default function Checkout() {
         setService(res.data);
         // Keep only addons that still exist
         if (res.data?.addons?.length) {
-          setSelectedAddons((prev) => prev.filter((id) => res.data.addons.some((a) => a.service_id === id)));
+          setSelectedAddons((prev) => prev.filter((id) => res.data.addons.some((a) => a.addon_id === id)));
         } else {
           setSelectedAddons([]);
         }
@@ -42,8 +42,8 @@ export default function Checkout() {
 
   const addonsTotal = service?.addons
     ? service.addons
-        .filter((a) => selectedAddons.includes(a.service_id))
-        .reduce((sum, a) => sum + (a.hourly_price || 0), 0)
+        .filter((a) => selectedAddons.includes(a.addon_id))
+        .reduce((sum, a) => sum + (a.price || 0), 0)
     : 0;
   const basePrice = service?.hourly_price || 0;
   const totalPrice = basePrice + addonsTotal;
@@ -124,14 +124,14 @@ export default function Checkout() {
                 <Typography variant="subtitle1" gutterBottom>Add-ons</Typography>
                 {service.addons.map((addon) => (
                   <FormControlLabel
-                    key={addon.service_id}
+                    key={addon.addon_id}
                     control={
                       <Checkbox
-                        checked={selectedAddons.includes(addon.service_id)}
-                        onChange={() => toggleAddon(addon.service_id)}
+                        checked={selectedAddons.includes(addon.addon_id)}
+                        onChange={() => toggleAddon(addon.addon_id)}
                       />
                     }
-                    label={`${addon.title} — $${addon.hourly_price ? addon.hourly_price.toFixed(2) : '0.00'}/hr`}
+                    label={`${addon.title} — $${addon.price ? addon.price.toFixed(2) : '0.00'}`}
                   />
                 ))}
               </Box>

@@ -3,6 +3,13 @@ from pydantic import BaseModel
 from datetime import datetime
 
 
+class ServiceAddonCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    price: float
+    delivery_time_extension: int = 0
+
+
 class ServiceCreate(BaseModel):
     title: str
     category: str
@@ -12,6 +19,7 @@ class ServiceCreate(BaseModel):
     package_tier: Optional[str] = None
     sample_work: Optional[str] = None
     addon_service_ids: Optional[List[int]] = None
+    addons: Optional[List[ServiceAddonCreate]] = None
 
 
 class ServiceUpdate(BaseModel):

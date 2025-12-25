@@ -30,9 +30,33 @@ export default function CreateService() {
     package_tier: "",
     sample_work: "",
   });
+  const [addons, setAddons] = useState([]);
+  const [newAddon, setNewAddon] = useState({
+    title: "",
+    description: "",
+    price: "",
+    delivery_time_extension: "",
+  });
 
   const handleChange = (e) => {
     setService({ ...service, [e.target.name]: e.target.value });
+  };
+
+  const handleAddonChange = (e) => {
+    setNewAddon({ ...newAddon, [e.target.name]: e.target.value });
+  };
+
+  const addAddon = () => {
+    if (!newAddon.title || !newAddon.price) {
+      alert("Add-on title and price are required.");
+      return;
+    }
+    setAddons([...addons, newAddon]);
+    setNewAddon({ title: "", description: "", price: "", delivery_time_extension: "" });
+  };
+
+  const removeAddon = (index) => {
+    setAddons(addons.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e) => {
@@ -54,6 +78,12 @@ export default function CreateService() {
         hourly_price: service.hourly_price ? parseFloat(service.hourly_price) : null,
         package_tier: service.package_tier || null,
         sample_work: service.sample_work || null,
+        addons: addons.map(a => ({
+          title: a.title,
+          description: a.description || null,
+          price: parseFloat(a.price),
+          delivery_time_extension: a.delivery_time_extension ? parseInt(a.delivery_time_extension) : 0
+        }))
       };
 
       const res = await axiosInstance.post(`/api/services?freelancer_id=${user.id}`, payload);
@@ -232,6 +262,76 @@ export default function CreateService() {
                       },
                     }}
                   />
+                </Grid>
+
+                {/* Add-ons Section */}
+                <Grid item xs={12}>
+                  <Typography variant="h6" sx={{ mt: 2, mb: 1, color: colors.color1 }}>
+                    Service Add-ons (Optional)
+                  </Typography>
+                  <Box sx={{ border: `1px solid ${colors.color3}`, borderRadius: 2, p: 2, mb: 2 }}>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          label="Add-on Title"
+                          name="title"
+                          fullWidth
+                          value={newAddon.title}
+                          onChange={handleAddonChange}
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={3}>
+                        <TextField
+                          label="Price ($)"
+                          name="price"
+                          type="number"
+                          fullWidth
+                          value={newAddon.price}
+                          onChange={handleAddonChange}
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={3}>
+                        <TextField
+                          label="Extra Days"
+                          name="delivery_time_extension"
+                          type="number"
+                          fullWidth
+                          value={newAddon.delivery_time_extension}
+                          onChange={handleAddonChange}
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <TextField
+                          label="Description"
+                          name="description"
+                          fullWidth
+                          value={newAddon.description}
+                          onChange={handleAddonChange}
+                          size="small"
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Button variant="outlined" onClick={addAddon} fullWidth>
+                          Add Add-on
+                        </Button>
+                      </Grid>
+                    </Grid>
+                  </Box>
+
+                  {/* List of added add-ons */}
+                  {addons.map((addon, index) => (
+                    <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, p: 1, bgcolor: colors.color4, borderRadius: 1 }}>
+                      <Typography variant="body2">
+                        {addon.title} - ${addon.price} (+{addon.delivery_time_extension} days)
+                      </Typography>
+                      <Button size="small" color="error" onClick={() => removeAddon(index)}>
+                        Remove
+                      </Button>
+                    </Box>
+                  ))}
                 </Grid>
               </Grid>
 
