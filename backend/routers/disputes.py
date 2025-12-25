@@ -117,6 +117,48 @@ async def list_disputes(status: Optional[str] = Query(None)):
         return []
 
 
+@router.get("/order/{order_id}", response_model=DisputePublic)
+async def get_dispute_for_order(order_id: int):
+    """Fetch the dispute for a given order if it exists."""
+    async with get_connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                '''
+                    SELECT d.dispute_id, d.status, d.resolution_message AS decision, d.resolved_at AS resolution_date,
+                           r.order_id, r.client_id, r.admin_id,
+                           nac.name AS client_name,
+                           a.username AS admin_name,
+                           d.freelancer_response, d.freelancer_response_at,
+                           d.description
+                    FROM "Dispute" d
+                    JOIN reported r ON d.dispute_id = r.dispute_id
+                    LEFT JOIN "NonAdmin" nac ON r.client_id = nac.user_id
+                    LEFT JOIN "Admin" a ON r.admin_id = a.user_id
+                    WHERE r.order_id = %s
+                    ORDER BY d.dispute_id DESC
+                    LIMIT 1
+                ''',
+                (order_id,),
+            )
+            row = await cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Dispute not found")
+            return DisputePublic(
+                dispute_id=row[0],
+                status=row[1],
+                decision=row[2],
+                resolution_date=row[3],
+                order_id=row[4],
+                client_id=row[5],
+                admin_id=row[6],
+                client_name=row[7],
+                admin_name=row[8],
+                freelancer_response=row[9],
+                freelancer_response_at=row[10],
+                description=row[11],
+            )
+
+
 @router.patch("/{dispute_id}/assign", response_model=DisputePublic)
 async def assign_dispute(dispute_id: int, admin_id: int = Query(...)):
     async with get_connection() as conn:

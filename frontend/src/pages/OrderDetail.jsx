@@ -307,12 +307,9 @@ export default function OrderDetail() {
     try {
       setDisputeResponseLoading(true);
       setDisputeResponseError('');
-      // Find dispute_id for this order
-      const disputesRes = await axiosInstance.get('/api/disputes');
-      const dispute = disputesRes.data?.find(d => d.order_id === Number(orderId));
-      if (!dispute) {
-        throw new Error('Dispute not found');
-      }
+      // Fetch dispute for this order
+      const disputeRes = await axiosInstance.get(`/api/disputes/order/${orderId}`);
+      const dispute = disputeRes.data;
       await axiosInstance.post(
         `/api/disputes/${dispute.dispute_id}/freelancer-response?freelancer_id=${user.id}`,
         { response: disputeResponse }
