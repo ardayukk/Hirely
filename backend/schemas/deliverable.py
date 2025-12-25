@@ -16,3 +16,6 @@ class DeliverablePublic(BaseModel):
     due_date: Optional[datetime] = None
     payment_amount: Optional[float] = None
     status: str
+    phase_number: Optional[int] = None
+    file_url: Optional[str] = None
+    submitted_at: Optional[datetime] = None

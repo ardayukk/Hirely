@@ -413,59 +413,115 @@ export default function OrderDetail() {
                   ) : deliverables.length === 0 ? (
                     <Typography variant="body2" color="text.secondary">No submissions yet.</Typography>
                   ) : (
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fill, minmax(280px, 1fr))' }, gap: 1.5 }}>
-                      {deliverables.map((d) => (
-                        <Paper
-                          key={d.deliverable_id}
-                          sx={{
-                            p: 1.5,
-                            border: '1px solid',
-                            borderColor: d.status === 'submitted' ? 'success.light' : 'grey.300',
-                            borderRadius: 1,
-                            backgroundColor: d.status === 'submitted' ? 'rgba(76, 175, 80, 0.05)' : 'transparent',
-                          }}
-                        >
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                            <Chip
-                              size="small"
-                              label={`Phase ${d.phase_number || 'N/A'}`}
-                              color={d.status === 'submitted' ? 'success' : 'default'}
-                              icon={d.status === 'submitted' ? '✓' : undefined}
-                            />
-                            <Typography variant="caption" color="text.secondary">
-                              {d.submitted_at ? new Date(d.submitted_at).toLocaleDateString() : 'Pending'}
-                            </Typography>
-                          </Box>
-                          {d.description && (
-                            <Typography variant="body2" sx={{ mb: 1, fontStyle: 'italic', color: 'text.secondary' }}>
-                              "{d.description}"
-                            </Typography>
-                          )}
-                          {d.file_url && (
-                            <Box sx={{ mt: 1, p: 1, backgroundColor: '#f5f5f5', borderRadius: 0.5 }}>
-                              <Typography variant="caption" display="block" sx={{ mb: 0.5, fontWeight: 500 }}>
-                                📎 Submitted File:
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: 'primary.main',
-                                  textDecoration: 'underline',
-                                  cursor: 'pointer',
-                                  wordBreak: 'break-word',
-                                }}
-                                component="a"
-                                href={`http://localhost:8000/${d.file_url}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                download
-                              >
-                                {d.file_url.split('/').pop()}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {deliverables.map((d, idx) => {
+                        const isPendingReview = d.status === 'submitted' && idx === deliverables.length - 1 && isClient;
+                        const statusColor = d.status === 'approved' ? 'success' : d.status === 'rejected' ? 'error' : 'info';
+                        
+                        return (
+                          <Paper
+                            key={d.deliverable_id}
+                            sx={{
+                              p: 2.5,
+                              border: '2px solid',
+                              borderColor: isPendingReview ? 'warning.main' : d.status === 'approved' ? 'success.light' : d.status === 'rejected' ? 'error.light' : 'grey.300',
+                              borderRadius: 1,
+                              backgroundColor: isPendingReview ? 'rgba(255, 193, 7, 0.08)' : d.status === 'approved' ? 'rgba(76, 175, 80, 0.05)' : d.status === 'rejected' ? 'rgba(244, 67, 54, 0.05)' : 'transparent',
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Chip
+                                  size="small"
+                                  label={`Phase ${d.phase_number || 'N/A'}`}
+                                  color={statusColor}
+                                  variant={isPendingReview ? 'filled' : 'outlined'}
+                                />
+                                <Chip
+                                  size="small"
+                                  label={d.status.charAt(0).toUpperCase() + d.status.slice(1)}
+                                  variant="outlined"
+                                />
+                              </Box>
+                              <Typography variant="caption" color="text.secondary">
+                                {d.submitted_at ? new Date(d.submitted_at).toLocaleDateString() : 'Pending'}
                               </Typography>
                             </Box>
-                          )}
-                        </Paper>
-                      ))}
+                            
+                            {d.description && (
+                              <Box sx={{ mb: 2, p: 1.5, backgroundColor: '#f9f9f9', borderRadius: 0.5, borderLeft: '3px solid', borderLeftColor: 'primary.main' }}>
+                                <Typography variant="caption" display="block" sx={{ mb: 0.5, fontWeight: 600, color: 'text.secondary' }}>
+                                  Freelancer's Note:
+                                </Typography>
+                                <Typography variant="body2" sx={{ color: 'text.primary' }}>
+                                  "{d.description}"
+                                </Typography>
+                              </Box>
+                            )}
+                            
+                            {d.file_url && (
+                              <Box sx={{ mb: 2, p: 1.5, backgroundColor: '#f0f7ff', borderRadius: 0.5, border: '1px solid #90caf9' }}>
+                                <Typography variant="caption" display="block" sx={{ mb: 0.75, fontWeight: 600, color: 'text.secondary' }}>
+                                  📎 Submitted File:
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: 'primary.main',
+                                    textDecoration: 'underline',
+                                    cursor: 'pointer',
+                                    wordBreak: 'break-word',
+                                  }}
+                                  component="a"
+                                  href={`http://localhost:8000/${d.file_url}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download
+                                >
+                                  {d.file_url.split('/').pop()}
+                                </Typography>
+                              </Box>
+                            )}
+                            
+                            {isPendingReview && (
+                              <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                                <Button
+                                  variant="contained"
+                                  color="success"
+                                  fullWidth
+                                  onClick={async () => {
+                                    try {
+                                      await axiosInstance.patch(`/api/orders/${orderId}/phase-review/accept?client_id=${user.id}`);
+                                      await fetchOrder();
+                                      alert('Phase accepted. Freelancer can now submit the next phase.');
+                                    } catch (err) {
+                                      alert(err.response?.data?.detail || 'Failed to accept phase');
+                                    }
+                                  }}
+                                >
+                                  ✓ Accept
+                                </Button>
+                                <Button
+                                  variant="contained"
+                                  color="error"
+                                  fullWidth
+                                  onClick={async () => {
+                                    try {
+                                      await axiosInstance.patch(`/api/orders/${orderId}/phase-review/decline?client_id=${user.id}`);
+                                      await fetchOrder();
+                                      alert('Phase declined. Freelancer will need to re-submit.');
+                                    } catch (err) {
+                                      alert(err.response?.data?.detail || 'Failed to decline phase');
+                                    }
+                                  }}
+                                >
+                                  ✗ Decline
+                                </Button>
+                              </Box>
+                            )}
+                          </Paper>
+                        );
+                      })}
                     </Box>
                   )}
                 </Box>
