@@ -28,6 +28,12 @@ export default function OrderDetail() {
   const [disputeResponseError, setDisputeResponseError] = useState('');
   const [deliverables, setDeliverables] = useState([]);
   const [loadingDeliverables, setLoadingDeliverables] = useState(false);
+  const [revisionFile, setRevisionFile] = useState(null);
+  const [revisionNote, setRevisionNote] = useState('');
+  const [revisionSending, setRevisionSending] = useState(false);
+  const [revisionError, setRevisionError] = useState('');
+  const [workFiles, setWorkFiles] = useState([]);
+  const [loadingWorkFiles, setLoadingWorkFiles] = useState(false);
 
   useEffect(() => {
     fetchOrder();
@@ -55,6 +61,10 @@ export default function OrderDetail() {
       } else {
         setDeliverables([]);
       }
+      // Load work files for delivered orders
+      if (res.data?.status === 'delivered' || res.data?.status === 'completed') {
+        await loadWorkFiles();
+      }
     } catch (err) {
       console.error('Failed to load order', err);
       setError(err.response?.data?.detail || 'Failed to load order details');
@@ -72,6 +82,19 @@ export default function OrderDetail() {
       console.error('Failed to load deliverables', err);
     } finally {
       setLoadingDeliverables(false);
+    }
+  };
+
+  const loadWorkFiles = async () => {
+    if (!user?.id) return;
+    try {
+      setLoadingWorkFiles(true);
+      const res = await axiosInstance.get(`/api/orders/${orderId}/work?user_id=${user.id}`);
+      setWorkFiles(res.data?.work_files || []);
+    } catch (err) {
+      console.error('Failed to load work files', err);
+    } finally {
+      setLoadingWorkFiles(false);
     }
   };
 
@@ -135,12 +158,13 @@ export default function OrderDetail() {
       setDeliverySending(true);
       setDeliveryError('');
 
-      // First, upload the delivery file via messages so both sides can access it
+      // Upload the delivery file to work upload endpoint
       const form = new FormData();
-      form.append('order_id', String(orderId));
-      form.append('message_text', deliveryNote || 'Final delivery');
       form.append('file', deliveryFile);
-      await axiosInstance.post(`/api/messages/upload?sender_id=${user.id}`, form);
+      if (deliveryNote) {
+        form.append('description', deliveryNote);
+      }
+      await axiosInstance.post(`/api/orders/${orderId}/work/upload?freelancer_id=${user.id}`, form);
 
       // Then mark the order as delivered
       await axiosInstance.patch(`/api/orders/${orderId}/deliver?freelancer_id=${user.id}`);
@@ -151,7 +175,12 @@ export default function OrderDetail() {
       setDeliveryNote('');
       alert('Order marked as delivered');
     } catch (err) {
-      const detail = err.response?.data?.detail || 'Failed to deliver order';
+      let detail = 'Failed to deliver order';
+      if (err.response?.data?.detail) {
+        detail = typeof err.response.data.detail === 'string' 
+          ? err.response.data.detail 
+          : JSON.stringify(err.response.data.detail);
+      }
       setDeliveryError(detail);
     } finally {
       setDeliverySending(false);
@@ -190,6 +219,43 @@ export default function OrderDetail() {
       alert('Revision requested');
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to request revision');
+    }
+  };
+
+  const handleUploadRevision = async () => {
+    if (!revisionFile) {
+      setRevisionError('Please select a file to upload');
+      return;
+    }
+    try {
+      setRevisionSending(true);
+      setRevisionError('');
+
+      const form = new FormData();
+      form.append('file', revisionFile);
+      if (revisionNote) {
+        form.append('description', revisionNote);
+      }
+      
+      await axiosInstance.post(
+        `/api/orders/${orderId}/work/upload?freelancer_id=${user.id}`,
+        form
+      );
+
+      await fetchOrder();
+      setRevisionFile(null);
+      setRevisionNote('');
+      alert('Revised work uploaded successfully');
+    } catch (err) {
+      let detail = 'Failed to upload revision';
+      if (err.response?.data?.detail) {
+        detail = typeof err.response.data.detail === 'string' 
+          ? err.response.data.detail 
+          : JSON.stringify(err.response.data.detail);
+      }
+      setRevisionError(detail);
+    } finally {
+      setRevisionSending(false);
     }
   };
 
@@ -424,8 +490,85 @@ export default function OrderDetail() {
               </>
             )}
 
+            {isFreelancer && order.status === 'revision_requested' && (
+              <>
+                <Divider sx={{ my: 2 }} />
+                <Box>
+                  <Typography variant="h6" sx={{ mb: 2, color: '#ff9800' }}>
+                    📝 Revision Requested - Upload Revised Work
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    The client has requested revisions. Please upload the revised version of your work.
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Attach revised work</Typography>
+                  <Button
+                    variant="outlined"
+                    component="label"
+                    sx={{ mr: 1, mb: 1 }}
+                    disabled={revisionSending}
+                  >
+                    {revisionFile ? 'Change file' : 'Choose file'}
+                    <input
+                      type="file"
+                      hidden
+                      onChange={(e) => setRevisionFile(e.target.files?.[0] || null)}
+                    />
+                  </Button>
+                  {revisionFile && (
+                    <Typography variant="body2" sx={{ mb: 1 }}>{revisionFile.name}</Typography>
+                  )}
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    placeholder="Optional note about the revisions"
+                    value={revisionNote}
+                    onChange={(e) => setRevisionNote(e.target.value)}
+                    disabled={revisionSending}
+                    sx={{ mb: 1 }}
+                  />
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    sx={{ mt: 1 }}
+                    onClick={handleUploadRevision}
+                    disabled={revisionSending || !revisionFile}
+                  >
+                    {revisionSending ? 'Uploading...' : 'Upload Revised Work'}
+                  </Button>
+                  {revisionError && (
+                    <Alert severity="error" sx={{ mt: 1 }}>{revisionError}</Alert>
+                  )}
+                </Box>
+              </>
+            )}
+
             {isClient && order.status === 'delivered' && (
               <>
+                <Divider sx={{ my: 2 }} />
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="h6" sx={{ mb: 1 }}>📦 Delivered Work</Typography>
+                  {loadingWorkFiles ? (
+                    <CircularProgress size={24} />
+                  ) : workFiles.length > 0 ? (
+                    <Box>
+                      {workFiles.map((file, idx) => (
+                        <Box key={idx} sx={{ p: 1.5, border: '1px solid #ddd', borderRadius: 1, mb: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            📎 <a href={`http://localhost:8000/${file.file_path}`} target="_blank" rel="noopener noreferrer" download>
+                              {file.file_name}
+                            </a>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {(file.file_size / 1024).toFixed(2)} KB • {new Date(file.uploaded_at).toLocaleString()}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">No files delivered yet</Typography>
+                  )}
+                </Box>
                 <Button fullWidth variant="contained" color="success" sx={{ mb: 1 }} onClick={handleComplete}>
                   Accept Delivery
                 </Button>

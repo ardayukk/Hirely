@@ -1,21 +1,21 @@
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 
 class ServiceAddonCreate(BaseModel):
     title: str
     description: Optional[str] = None
-    price: float
-    delivery_time_extension: int = 0
+    price: float = Field(..., gt=0)
+    delivery_time_extension: int = Field(0, ge=0)
 
 
 class ServiceCreate(BaseModel):
     title: str
     category: str
     description: Optional[str] = None
-    delivery_time: Optional[int] = None  # in days
-    hourly_price: Optional[float] = None
+    delivery_time: Optional[int] = Field(None, ge=0)  # in days
+    hourly_price: Optional[float] = Field(None, ge=0)
     package_tier: Optional[str] = None
     sample_work: Optional[str] = None
     addon_service_ids: Optional[List[int]] = None

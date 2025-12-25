@@ -1,18 +1,18 @@
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 
 
 class OrderCreate(BaseModel):
     """Client places an order for a service"""
     service_id: int
-    total_price: float
-    order_type: str  # 'small' or 'big'
+    total_price: float = Field(..., gt=0)
+    order_type: Literal["small", "big"]
     delivery_date: Optional[datetime] = None  # for small orders
-    milestone_count: Optional[int] = None  # for big orders
+    milestone_count: Optional[int] = Field(None, ge=1)  # for big orders
     milestone_delivery_date: Optional[datetime] = None
     requirements: Optional[Dict[str, Any]] = None
-    required_hours: Optional[int] = None
+    required_hours: Optional[int] = Field(None, ge=1)
     addon_service_ids: Optional[List[int]] = None
 
 
@@ -52,13 +52,13 @@ class OrderDetail(OrderPublic):
 
 class RevisionCreate(BaseModel):
     """Client requests a revision"""
-    revision_text: str
+    revision_text: str = Field(..., min_length=1)
 
 
 class PurchaseRevisionsRequest(BaseModel):
-    quantity: int
+    quantity: int = Field(..., ge=1, le=100)
     payment_ref: Optional[str] = None
-    amount: Optional[float] = 0.0
+    amount: Optional[float] = Field(0.0, ge=0)
 
 
 class RevisionPublic(BaseModel):
@@ -71,9 +71,9 @@ class RevisionPublic(BaseModel):
 
 class ReviewCreate(BaseModel):
     """Client leaves a review after completion"""
-    rating: int  # 1-5
-    comment: Optional[str] = None
-    highlights: Optional[str] = None
+    rating: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = Field(None, max_length=2000)
+    highlights: Optional[str] = Field(None, max_length=2000)
 
 
 class ReviewPublic(BaseModel):

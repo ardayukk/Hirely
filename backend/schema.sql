@@ -479,6 +479,243 @@ CREATE TABLE IF NOT EXISTS "Notification" (
 );
 
 -- ============================================
+-- VIEWS (Simplified Query Access Patterns)
+-- ============================================
+
+-- View: Orders with full details (client name, freelancer name, service title)
+CREATE OR REPLACE VIEW view_order_details AS
+SELECT 
+    o.order_id,
+    o.client_id,
+    c.display_name AS client_name,
+    o.freelancer_id,
+    f.user_id AS freelancer_user_id,
+    na.name AS freelancer_name,
+    o.service_id,
+    s.title AS service_title,
+    s.category,
+    o.status,
+    o.total_price,
+    o.requirements,
+    o.revision_count,
+    o.included_revision_limit,
+    o.payment_id,
+    o.created_at,
+    p.status AS payment_status
+FROM "Order" o
+LEFT JOIN "Client" c ON o.client_id = c.user_id
+LEFT JOIN "Freelancer" f ON o.freelancer_id = f.user_id
+LEFT JOIN "NonAdmin" na ON f.user_id = na.user_id
+LEFT JOIN "Service" s ON o.service_id = s.service_id
+LEFT JOIN "Payment" p ON o.payment_id = p.payment_id;
+
+-- View: Messages with sender/receiver names
+CREATE OR REPLACE VIEW view_message_details AS
+SELECT 
+    m.message_id,
+    m.order_id,
+    m.sender_id,
+    u_sender.email AS sender_email,
+    na_sender.name AS sender_name,
+    m.receiver_id,
+    u_receiver.email AS receiver_email,
+    na_receiver.name AS receiver_name,
+    m.message_text,
+    m.is_read,
+    m.created_at
+FROM "Messages" m
+LEFT JOIN "User" u_sender ON m.sender_id = u_sender.user_id
+LEFT JOIN "NonAdmin" na_sender ON u_sender.user_id = na_sender.user_id
+LEFT JOIN "User" u_receiver ON m.receiver_id = u_receiver.user_id
+LEFT JOIN "NonAdmin" na_receiver ON u_receiver.user_id = na_receiver.user_id;
+
+-- View: Disputes with order and user details
+CREATE OR REPLACE VIEW view_dispute_details AS
+SELECT 
+    d.dispute_id,
+    d.order_id,
+    d.client_id,
+    c.display_name AS client_name,
+    d.admin_id,
+    COALESCE(admin_user.username, 'Unassigned') AS admin_name,
+    o.freelancer_id,
+    f_na.name AS freelancer_name,
+    o.service_id,
+    s.title AS service_title,
+    d.description,
+    d.status,
+    d.freelancer_response,
+    d.admin_notes,
+    d.resolution_message,
+    d.opened_at,
+    d.resolved_at
+FROM "Dispute" d
+LEFT JOIN "Client" c ON d.client_id = c.user_id
+LEFT JOIN "Admin" admin_user ON d.admin_id = admin_user.user_id
+LEFT JOIN "Order" o ON d.order_id = o.order_id
+LEFT JOIN "Freelancer" f ON o.freelancer_id = f.user_id
+LEFT JOIN "NonAdmin" f_na ON f.user_id = f_na.user_id
+LEFT JOIN "Service" s ON o.service_id = s.service_id;
+
+-- View: Services with freelancer details
+CREATE OR REPLACE VIEW view_service_details AS
+SELECT 
+    s.service_id,
+    s.freelancer_id,
+    na.name AS freelancer_name,
+    f.tagline,
+    f.avg_rating,
+    f.total_orders,
+    s.title,
+    s.category,
+    s.description,
+    s.delivery_time,
+    s.hourly_price,
+    s.package_tier,
+    s.status,
+    s.average_rating,
+    s.created_at
+FROM "Service" s
+LEFT JOIN "Freelancer" f ON s.freelancer_id = f.user_id
+LEFT JOIN "NonAdmin" na ON f.user_id = na.user_id;
+
+-- View: User profiles (combining Client and Freelancer data)
+CREATE OR REPLACE VIEW view_user_profiles AS
+SELECT 
+    u.user_id,
+    u.email,
+    u.role,
+    na.name,
+    na.phone,
+    na.address,
+    na.wallet_balance,
+    u.date_joined,
+    CASE 
+        WHEN u.role = 'client' THEN c.display_name
+        ELSE NULL
+    END AS client_display_name,
+    CASE 
+        WHEN u.role = 'freelancer' THEN f.tagline
+        ELSE NULL
+    END AS freelancer_tagline,
+    CASE 
+        WHEN u.role = 'freelancer' THEN f.avg_rating
+        ELSE NULL
+    END AS freelancer_rating,
+    CASE 
+        WHEN u.role = 'freelancer' THEN f.total_orders
+        ELSE NULL
+    END AS freelancer_total_orders
+FROM "User" u
+LEFT JOIN "NonAdmin" na ON u.user_id = na.user_id
+LEFT JOIN "Client" c ON u.user_id = c.user_id
+LEFT JOIN "Freelancer" f ON u.user_id = f.user_id;
+
+-- View: Order timeline (status history view for tracking)
+CREATE OR REPLACE VIEW view_order_timeline AS
+SELECT 
+    o.order_id,
+    o.client_id,
+    c.display_name AS client_name,
+    o.freelancer_id,
+    na.name AS freelancer_name,
+    o.status,
+    o.created_at AS order_created,
+    so.delivery_date AS small_order_deadline,
+    bo.milestone_delivery_date AS big_order_deadline,
+    p.created_at AS payment_created,
+    p.status AS payment_status
+FROM "Order" o
+LEFT JOIN "Client" c ON o.client_id = c.user_id
+LEFT JOIN "Freelancer" f ON o.freelancer_id = f.user_id
+LEFT JOIN "NonAdmin" na ON f.user_id = na.user_id
+LEFT JOIN "SmallOrder" so ON o.order_id = so.order_id
+LEFT JOIN "BigOrder" bo ON o.order_id = bo.order_id
+LEFT JOIN "Payment" p ON o.payment_id = p.payment_id;
+
+-- View: Freelancer dashboard stats
+CREATE OR REPLACE VIEW view_freelancer_stats AS
+SELECT 
+    f.user_id AS freelancer_id,
+    na.name AS freelancer_name,
+    f.avg_rating,
+    f.total_orders,
+    f.total_reviews,
+    COUNT(DISTINCT s.service_id) AS active_services,
+    COUNT(DISTINCT CASE WHEN o.status = 'completed' THEN o.order_id END) AS completed_orders,
+    COUNT(DISTINCT CASE WHEN o.status IN ('in_progress', 'revision_requested') THEN o.order_id END) AS active_orders,
+    COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total_price ELSE 0 END), 0) AS total_earnings
+FROM "Freelancer" f
+LEFT JOIN "NonAdmin" na ON f.user_id = na.user_id
+LEFT JOIN "Service" s ON f.user_id = s.freelancer_id AND s.status = 'ACTIVE'
+LEFT JOIN "Order" o ON f.user_id = o.freelancer_id
+GROUP BY f.user_id, na.name, f.avg_rating, f.total_orders, f.total_reviews;
+
+-- View: Client dashboard stats
+CREATE OR REPLACE VIEW view_client_stats AS
+SELECT 
+    c.user_id AS client_id,
+    c.display_name AS client_name,
+    na.wallet_balance,
+    COUNT(DISTINCT o.order_id) AS total_orders,
+    COUNT(DISTINCT CASE WHEN o.status = 'completed' THEN o.order_id END) AS completed_orders,
+    COUNT(DISTINCT CASE WHEN o.status IN ('pending', 'accepted', 'in_progress', 'revision_requested') THEN o.order_id END) AS active_orders,
+    COALESCE(SUM(o.total_price), 0) AS total_spent
+FROM "Client" c
+LEFT JOIN "NonAdmin" na ON c.user_id = na.user_id
+LEFT JOIN "Order" o ON c.user_id = o.client_id
+GROUP BY c.user_id, c.display_name, na.wallet_balance;
+
+-- View: Notifications with user context
+CREATE OR REPLACE VIEW view_notification_context AS
+SELECT 
+    n.notification_id,
+    n.user_id,
+    u.email,
+    na.name,
+    n.type,
+    n.message,
+    n.is_read,
+    n.created_at
+FROM "Notification" n
+LEFT JOIN "User" u ON n.user_id = u.user_id
+LEFT JOIN "NonAdmin" na ON u.user_id = na.user_id;
+
+-- View: Recent activity (orders, messages, disputes)
+CREATE OR REPLACE VIEW view_recent_activity AS
+SELECT 
+    o.order_id,
+    'order_created' AS activity_type,
+    o.created_at,
+    c.user_id AS user_id,
+    c.display_name AS user_name,
+    'Order created: ' || s.title AS activity_description
+FROM "Order" o
+LEFT JOIN "Client" c ON o.client_id = c.user_id
+LEFT JOIN "Service" s ON o.service_id = s.service_id
+UNION ALL
+SELECT 
+    m.order_id,
+    'message_sent' AS activity_type,
+    m.created_at,
+    m.sender_id AS user_id,
+    na.name AS user_name,
+    'Sent message in order' AS activity_description
+FROM "Messages" m
+LEFT JOIN "NonAdmin" na ON m.sender_id = na.user_id
+UNION ALL
+SELECT 
+    d.order_id,
+    'dispute_opened' AS activity_type,
+    d.opened_at,
+    d.client_id AS user_id,
+    c.display_name AS user_name,
+    'Opened dispute' AS activity_description
+FROM "Dispute" d
+LEFT JOIN "Client" c ON d.client_id = c.user_id
+ORDER BY created_at DESC;
+
+-- ============================================
 -- INDICES
 -- ============================================
 

@@ -22,6 +22,8 @@ WITHDRAWAL_FEE_FIXED = Decimal("1.00")  # $1 fixed fee
 
 def calculate_withdrawal_fee(amount: Decimal) -> Decimal:
     """Calculate withdrawal fee: 2% + $1 fixed"""
+    if amount <= 0:
+        raise ValueError("amount must be greater than 0")
     percentage_fee = amount * WITHDRAWAL_FEE_PERCENT
     total_fee = percentage_fee + WITHDRAWAL_FEE_FIXED
     return total_fee.quantize(Decimal("0.01"))
@@ -210,6 +212,13 @@ async def request_withdrawal(
             # Calculate fee and net amount
             fee = calculate_withdrawal_fee(withdrawal.amount)
             net_amount = withdrawal.amount - fee
+
+            # Assertion: fee can't exceed amount (net payout must be non-negative)
+            if fee < 0 or net_amount < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid fee calculation (fee exceeds amount)",
+                )
             
             # Check sufficient balance
             if wallet_balance < withdrawal.amount:
@@ -236,12 +245,19 @@ async def request_withdrawal(
             # Deduct amount from wallet
             await cur.execute(
                 '''
-                UPDATE "NonAdmin" 
+                UPDATE "NonAdmin"
                 SET wallet_balance = wallet_balance - %s
-                WHERE user_id = %s
+                WHERE user_id = %s AND wallet_balance >= %s
                 ''',
-                (withdrawal.amount, freelancer_id)
+                (withdrawal.amount, freelancer_id, withdrawal.amount)
             )
+
+            # Assertion: protect against race conditions causing negative balances
+            if cur.rowcount != 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Insufficient balance (concurrent update)",
+                )
             
             await conn.commit()
             
