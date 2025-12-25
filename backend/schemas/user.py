@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Literal
 from pydantic import BaseModel, EmailStr
 
 
@@ -6,7 +6,7 @@ class UserCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
-    role: str  # 'client', 'freelancer', or 'admin'
+    role: Literal["client", "freelancer", "admin"]
 
 
 class UserPublic(BaseModel):
