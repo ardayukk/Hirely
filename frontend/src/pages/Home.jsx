@@ -91,6 +91,7 @@ export default function Home() {
             actions: [
                 { label: 'Admin panel', to: '/admin', variant: 'contained' },
                 { label: 'Manage users', to: '/admin' },
+                { label: 'Pricing Trends', to: '/admin?tab=pricing' },
             ],
         },
         {

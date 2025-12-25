@@ -1,5 +1,6 @@
 import { Box, Container, Tab, Tabs, Typography } from '@mui/material';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import CategoryTrends from '../components/CategoryTrends';
 import { useAuth } from '../context/Authcontext';
 import AdminDisputes from './AdminDisputes';
@@ -9,7 +10,27 @@ import PricingAnalytics from './PricingAnalytics';
 
 export default function Admin() {
     const { user } = useAuth();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState(0);
+
+    useEffect(() => {
+        const tabParam = searchParams.get('tab');
+        if (tabParam === 'pricing') setActiveTab(4);
+        else if (tabParam === 'trends') setActiveTab(3);
+        else if (tabParam === 'satisfaction') setActiveTab(2);
+        else if (tabParam === 'freelancers') setActiveTab(1);
+        else if (tabParam === 'disputes') setActiveTab(0);
+    }, [searchParams]);
+
+    const handleTabChange = (event, newValue) => {
+        setActiveTab(newValue);
+        let tabName = 'disputes';
+        if (newValue === 1) tabName = 'freelancers';
+        if (newValue === 2) tabName = 'satisfaction';
+        if (newValue === 3) tabName = 'trends';
+        if (newValue === 4) tabName = 'pricing';
+        setSearchParams({ tab: tabName });
+    };
 
     if (user?.role !== 'admin') {
         return (
@@ -30,7 +51,7 @@ export default function Admin() {
                 </Typography>
             </Box>
 
-            <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
+            <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}>
                 <Tab label="Disputes" />
                 <Tab label="Top Freelancers" />
                 <Tab label="Satisfaction Metrics" />

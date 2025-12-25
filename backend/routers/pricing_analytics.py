@@ -11,10 +11,10 @@ from backend.schemas.pricing_analytics import (
     PremiumAdoptionPoint,
 )
 
-router = APIRouter(prefix="/pricing-analytics", tags=["pricing-analytics"])
+router = APIRouter(tags=["pricing-analytics"])
 
 
-@router.get("/summary", response_model=PricingSummary)
+@router.get("/pricing-analytics/summary", response_model=PricingSummary)
 async def get_pricing_summary():
     """Get overall pricing metrics for the platform"""
     try:
@@ -76,7 +76,7 @@ async def get_pricing_summary():
         )
 
 
-@router.get("/category-trends", response_model=List[CategoryTrendPoint])
+@router.get("/pricing-analytics/category-trends", response_model=List[CategoryTrendPoint])
 async def get_category_trends(
     granularity: str = Query("month", pattern="^(day|week|month)$"),
 ):
@@ -111,7 +111,7 @@ async def get_category_trends(
         return []
 
 
-@router.get("/price-distribution", response_model=List[PriceDistributionBucket])
+@router.get("/pricing-analytics/price-distribution", response_model=List[PriceDistributionBucket])
 async def get_price_distribution(
     bucket_size: float = Query(10.0, ge=1.0),
 ):
@@ -144,7 +144,7 @@ async def get_price_distribution(
         return []
 
 
-@router.get("/price-demand-correlation", response_model=List[PriceDemandPoint])
+@router.get("/pricing-analytics/price-demand-correlation", response_model=List[PriceDemandPoint])
 async def get_price_demand_correlation():
     """Get price vs demand data for correlation analysis"""
     try:
@@ -181,7 +181,7 @@ async def get_price_demand_correlation():
         return []
 
 
-@router.get("/undercutting-patterns", response_model=List[UndercuttingService])
+@router.get("/pricing-analytics/undercutting-patterns", response_model=List[UndercuttingService])
 async def get_undercutting_patterns(
     threshold_percentage: float = Query(20.0, ge=0.0, le=100.0),
 ):
@@ -227,7 +227,7 @@ async def get_undercutting_patterns(
         return []
 
 
-@router.get("/premium-adoption", response_model=List[PremiumAdoptionPoint])
+@router.get("/pricing-analytics/premium-adoption", response_model=List[PremiumAdoptionPoint])
 async def get_premium_adoption(
     granularity: str = Query("month", pattern="^(day|week|month)$"),
 ):
