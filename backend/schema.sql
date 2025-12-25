@@ -56,8 +56,10 @@ CREATE TABLE IF NOT EXISTS "Service" (
     delivery_time INTEGER,
     hourly_price DECIMAL(10, 2),
     package_tier TEXT DEFAULT 'basic',
+    revision_limit INTEGER DEFAULT 1,
     status TEXT DEFAULT 'ACTIVE',
     average_rating DECIMAL(3, 2) DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -92,6 +94,7 @@ CREATE TABLE IF NOT EXISTS "Order" (
     requirements TEXT,
     revision_count INTEGER DEFAULT 0,
     included_revision_limit INTEGER DEFAULT 1,
+    last_revision_id INTEGER,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -104,6 +107,38 @@ CREATE TABLE IF NOT EXISTS "Review" (
     comment TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     highlights TEXT
+);
+
+-- ============================================
+-- REVISIONS
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS "Revision" (
+    revision_id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    client_id INTEGER NOT NULL,
+    freelancer_id INTEGER NOT NULL,
+    revision_no INTEGER NOT NULL,
+    revision_text TEXT NOT NULL,
+    status TEXT DEFAULT 'requested',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ
+);
+
+DO $$ BEGIN 
+    ALTER TABLE "Revision" ADD CONSTRAINT revision_status_check 
+    CHECK (status IN ('requested', 'in_progress', 'resolved')); 
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE INDEX IF NOT EXISTS idx_revision_order_id ON "Revision" (order_id);
+
+CREATE TABLE IF NOT EXISTS "RevisionPurchase" (
+    purchase_id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    purchased_revisions INTEGER NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    payment_ref TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================
@@ -136,6 +171,27 @@ CREATE TABLE IF NOT EXISTS "Deliverable" (
 );
 
 -- ============================================
+-- DELIVERIES (single delivery submissions)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS "Delivery" (
+    delivery_id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    freelancer_id INTEGER NOT NULL,
+    message TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    delivered_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "DeliveryFile" (
+    file_id SERIAL PRIMARY KEY,
+    delivery_id INTEGER NOT NULL,
+    file_path TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
 -- EXTRA FEATURE: Service Add-ons
 -- ============================================
 
@@ -154,6 +210,14 @@ CREATE TABLE IF NOT EXISTS "OrderAddon" (
     addon_id INTEGER NOT NULL,
     quantity INTEGER DEFAULT 1
 );
+
+-- Compatibility view for older code paths that read from `order_addon`
+CREATE OR REPLACE VIEW order_addon AS
+SELECT
+    oa.order_id,
+    sa.service_id AS addon_service_id
+FROM "OrderAddon" oa
+JOIN "ServiceAddon" sa ON oa.addon_id = sa.addon_id;
 
 -- ============================================
 -- EXTRA FEATURE: Freelancer Portfolio/Sample Work
@@ -259,6 +323,62 @@ CREATE TABLE IF NOT EXISTS "ServiceVersion" (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ============================================
+-- ANALYTICS
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS "ServiceEvent" (
+    event_id SERIAL PRIMARY KEY,
+    service_id INTEGER NOT NULL,
+    user_id INTEGER,
+    event_type TEXT NOT NULL CHECK (event_type IN ('VIEW', 'CLICK', 'ORDER_CONVERSION', 'CONTACT')),
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_service_event_service_time ON "ServiceEvent"(service_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_service_event_type ON "ServiceEvent"(event_type);
+
+CREATE TABLE IF NOT EXISTS "ServiceDailyMetric" (
+    metric_id SERIAL PRIMARY KEY,
+    service_id INTEGER NOT NULL,
+    date DATE NOT NULL,
+    views_count INTEGER DEFAULT 0,
+    clicks_count INTEGER DEFAULT 0,
+    orders_count INTEGER DEFAULT 0,
+    conversion_rate DECIMAL(5, 4) DEFAULT 0.0000,
+    avg_response_time DECIMAL(10, 2),
+    avg_rating DECIMAL(3, 2),
+    total_earnings DECIMAL(10, 2) DEFAULT 0.00,
+    impressions_count INTEGER DEFAULT 0,
+    ctr DECIMAL(5, 4) DEFAULT 0.0000,
+    UNIQUE(service_id, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_service_daily_metric_service_date ON "ServiceDailyMetric"(service_id, date);
+
+CREATE TABLE IF NOT EXISTS "CategoryDailyMetrics" (
+    metric_id SERIAL PRIMARY KEY,
+    metric_date DATE NOT NULL,
+    category TEXT NOT NULL,
+    total_orders INTEGER DEFAULT 0,
+    total_revenue DECIMAL(10, 2) DEFAULT 0.00,
+    avg_order_value DECIMAL(10, 2) DEFAULT 0.00,
+    unique_buyers INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(metric_date, category)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cat_metrics_date_cat ON "CategoryDailyMetrics"(metric_date, category);
+
+CREATE TABLE IF NOT EXISTS "CategoryMetadata" (
+    category TEXT PRIMARY KEY,
+    is_promoted BOOLEAN DEFAULT FALSE,
+    recruitment_needed BOOLEAN DEFAULT FALSE,
+    notes TEXT,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Compatibility bridges (keep app code working while staying simple)
 CREATE TABLE IF NOT EXISTS "create_service" (
     freelancer_id INTEGER NOT NULL,
@@ -335,8 +455,7 @@ CREATE TABLE IF NOT EXISTS "Dispute" (
     admin_notes TEXT,
     resolution_message TEXT,
     opened_at TIMESTAMPTZ DEFAULT NOW(),
-    resolved_at TIMESTAMPTZ,
-    -- legacy column list ended here; keep ordering for readability
+    resolved_at TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS "DisputeEvidence" (
@@ -449,6 +568,20 @@ DO $$ BEGIN ALTER TABLE "WithdrawalMethod" ADD CONSTRAINT withdrawalmethod_freel
 DO $$ BEGIN ALTER TABLE "Withdrawal" ADD CONSTRAINT withdrawal_freelancer_fk FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE "Withdrawal" ADD CONSTRAINT withdrawal_method_fk FOREIGN KEY (withdrawal_method_id) REFERENCES "WithdrawalMethod"(method_id) ON DELETE RESTRICT; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE "Notification" ADD CONSTRAINT notification_user_fk FOREIGN KEY (user_id) REFERENCES "User"(user_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Foreign Keys (consolidated from archived migration scripts)
+DO $$ BEGIN ALTER TABLE "Revision" ADD CONSTRAINT revision_order_fk FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Revision" ADD CONSTRAINT revision_client_fk FOREIGN KEY (client_id) REFERENCES "Client"(user_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Revision" ADD CONSTRAINT revision_freelancer_fk FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "RevisionPurchase" ADD CONSTRAINT revisionpurchase_order_fk FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN ALTER TABLE "Delivery" ADD CONSTRAINT delivery_order_fk FOREIGN KEY (order_id) REFERENCES "Order"(order_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "Delivery" ADD CONSTRAINT delivery_freelancer_fk FOREIGN KEY (freelancer_id) REFERENCES "Freelancer"(user_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "DeliveryFile" ADD CONSTRAINT deliveryfile_delivery_fk FOREIGN KEY (delivery_id) REFERENCES "Delivery"(delivery_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN ALTER TABLE "ServiceEvent" ADD CONSTRAINT serviceevent_service_fk FOREIGN KEY (service_id) REFERENCES "Service"(service_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "ServiceEvent" ADD CONSTRAINT serviceevent_user_fk FOREIGN KEY (user_id) REFERENCES "User"(user_id) ON DELETE SET NULL; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "ServiceDailyMetric" ADD CONSTRAINT servicedailymetric_service_fk FOREIGN KEY (service_id) REFERENCES "Service"(service_id) ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ============================================
 -- VIEWS (Simplified Query Access Patterns)
@@ -693,6 +826,7 @@ ORDER BY created_at DESC;
 
 CREATE INDEX IF NOT EXISTS idx_user_email ON "User"(email);
 CREATE INDEX IF NOT EXISTS idx_service_freelancer ON "Service"(freelancer_id);
+CREATE INDEX IF NOT EXISTS idx_service_status ON "Service"(status);
 CREATE INDEX IF NOT EXISTS idx_order_client ON "Order"(client_id);
 CREATE INDEX IF NOT EXISTS idx_order_freelancer ON "Order"(freelancer_id);
 CREATE INDEX IF NOT EXISTS idx_messages_order ON "Messages"(order_id);
