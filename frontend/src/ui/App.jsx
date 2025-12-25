@@ -6,32 +6,31 @@ import { useContext } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/Authcontext'; // ✅ import your Auth hook (fixed relative path & filename case)
 import { MockApiProvider } from '../context/MockApiProvider';
+import Admin from '../pages/AdminDisputes';
 import Checkout from '../pages/Checkout';
 import ClientWorkspace from '../pages/Client';
+import CreateService from '../pages/CreateService';
+import EditService from '../pages/EditService';
+import Favorites from '../pages/Favorites';
 import Home from '../pages/Home';
 import Inbox from '../pages/Inbox';
 import Login from '../pages/Login';
 import Logout from '../pages/Logout';
+import MyPortfolio from '../pages/MyPortfolio';
+import MyServices from '../pages/MyServices';
 import Notifications from '../pages/Notifications';
 import OrderDetail from '../pages/OrderDetail';
 import Orders from '../pages/Orders';
+import Portfolio from '../pages/Portfolio';
+import PricingHistory from '../pages/PricingHistory';
 import Profile from '../pages/Profile';
 import Register from '../pages/Register';
 import Seller from '../pages/Seller';
-import Admin from '../pages/AdminDisputes';
-import Workspace from '../pages/Workspace';
-import Services from '../pages/Services';
 import ServiceDetail from '../pages/ServiceDetail';
-import EditService from '../pages/EditService';
-import CreateService from '../pages/CreateService';
-import MyServices from '../pages/MyServices';
-import Favorites from '../pages/Favorites';
-import Portfolio from '../pages/Portfolio';
-import Availability from '../pages/Availability';
-import Warranty from '../pages/Warranty';
-import PricingHistory from '../pages/PricingHistory';
+import Services from '../pages/Services';
 import ServiceVersions from '../pages/ServiceVersions';
-import MyPortfolio from '../pages/MyPortfolio';
+import Warranty from '../pages/Warranty';
+import Workspace from '../pages/Workspace';
 import { ThemeModeContext } from './main';
 
 function AppContent() {
@@ -88,39 +87,38 @@ function AppContent() {
             )}
 
             <MockApiProvider>
-            <Routes>
-                <Route path="/" element={<Navigate to="/login" replace />} />
-                <Route path="/login" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Login /></div>} />
-                <Route path="/register" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Register /></div>} />
+                <Routes>
+                    <Route path="/" element={<Navigate to="/login" replace />} />
+                    <Route path="/login" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Login /></div>} />
+                    <Route path="/register" element={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}><Register /></div>} />
 
-                <Route path="/home" element={requireAuth(<Home />)} />
-                <Route path="/profile" element={requireAuth(<Container sx={{ mt: 4 }}><Profile /></Container>)} />
-                <Route path="/seller" element={requireAuth(<Seller />)} />
-                <Route path="/client" element={requireAuth(<ClientWorkspace />)} />
-                <Route path="/admin" element={requireAuth(<Admin />)} />
-                <Route path="/workspace" element={requireAuth(<Workspace />)} />
-                <Route path="/checkout/:serviceId" element={requireAuth(<Checkout />)} />
-                <Route path="/orders" element={requireAuth(<Orders />)} />
-                <Route path="/orders/:orderId" element={requireAuth(<OrderDetail />)} />
-                <Route path="/inbox" element={requireAuth(<Inbox />)} />
-                <Route path="/inbox/:conversationId" element={requireAuth(<OrderDetail />)} />
-                <Route path="/notifications" element={requireAuth(<Notifications />)} />
-                <Route path="/services" element={requireAuth(<Services />)} />
-                <Route path="/services/:serviceId" element={requireAuth(<ServiceDetail />)} />
-                <Route path="/services/:serviceId/edit" element={requireAuth(<EditService />)} />
-                <Route path="/create-service" element={requireAuth(<CreateService />)} />
-                <Route path="/myServices" element={requireAuth(<MyServices />)} />
-                <Route path="/favorites" element={requireAuth(<Favorites />)} />
-                <Route path="/portfolio/:freelancerId" element={requireAuth(<Portfolio />)} />
-                <Route path="/my-portfolio" element={requireAuth(<MyPortfolio />)} />
-                <Route path="/availability/:freelancerId" element={requireAuth(<Availability />)} />
-                <Route path="/warranty/:orderId" element={requireAuth(<Warranty />)} />
-                <Route path="/pricing-history/:serviceId" element={requireAuth(<PricingHistory />)} />
-                <Route path="/service-versions/:serviceId" element={requireAuth(<ServiceVersions />)} />
-                <Route path="/logout" element={<Logout />} />
+                    <Route path="/home" element={requireAuth(<Home />)} />
+                    <Route path="/profile" element={requireAuth(<Container sx={{ mt: 4 }}><Profile /></Container>)} />
+                    <Route path="/seller" element={requireAuth(<Seller />)} />
+                    <Route path="/client" element={requireAuth(<ClientWorkspace />)} />
+                    <Route path="/admin" element={requireAuth(<Admin />)} />
+                    <Route path="/workspace" element={requireAuth(<Workspace />)} />
+                    <Route path="/checkout/:serviceId" element={requireAuth(<Checkout />)} />
+                    <Route path="/orders" element={requireAuth(<Orders />)} />
+                    <Route path="/orders/:orderId" element={requireAuth(<OrderDetail />)} />
+                    <Route path="/inbox" element={requireAuth(<Inbox />)} />
+                    <Route path="/inbox/:conversationId" element={requireAuth(<OrderDetail />)} />
+                    <Route path="/notifications" element={requireAuth(<Notifications />)} />
+                    <Route path="/services" element={requireAuth(<Services />)} />
+                    <Route path="/services/:serviceId" element={requireAuth(<ServiceDetail />)} />
+                    <Route path="/services/:serviceId/edit" element={requireAuth(<EditService />)} />
+                    <Route path="/create-service" element={requireAuth(<CreateService />)} />
+                    <Route path="/myServices" element={requireAuth(<MyServices />)} />
+                    <Route path="/favorites" element={requireAuth(<Favorites />)} />
+                    <Route path="/portfolio/:freelancerId" element={requireAuth(<Portfolio />)} />
+                    <Route path="/my-portfolio" element={requireAuth(<MyPortfolio />)} />
+                    <Route path="/warranty/:orderId" element={requireAuth(<Warranty />)} />
+                    <Route path="/pricing-history/:serviceId" element={requireAuth(<PricingHistory />)} />
+                    <Route path="/service-versions/:serviceId" element={requireAuth(<ServiceVersions />)} />
+                    <Route path="/logout" element={<Logout />} />
 
-                <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />
-            </Routes>
+                    <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />
+                </Routes>
             </MockApiProvider>
         </>
     );
