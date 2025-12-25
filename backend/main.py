@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import asyncio
 
 # Fix for Windows: psycopg requires WindowsSelectorEventLoopPolicy
@@ -31,7 +31,6 @@ from backend.routers import (
     portfolio,
     my_portfolio,
     availability,
-    warranty,
     pricing_history,
 )
 
@@ -49,7 +48,6 @@ async def _on_startup():
 async def _on_shutdown():
     await close_pool()
 
-# CORS for local dev (allow all localhost ports for development)
 # CORS for local dev (allow common localhost origins)
 app.add_middleware(
     CORSMiddleware,
@@ -89,7 +87,6 @@ app.include_router(favorites.router, prefix="/api")
 app.include_router(portfolio.router, prefix="/api")
 app.include_router(my_portfolio.router, prefix="/api")
 app.include_router(availability.router, prefix="/api")
-app.include_router(warranty.router, prefix="/api")
 app.include_router(pricing_history.router, prefix="/api")
 
 @app.get("/")

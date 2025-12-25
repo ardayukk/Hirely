@@ -596,9 +596,7 @@ export default function OrderDetail() {
               </Button>
             )}
 
-            {['completed', 'delivered'].includes(order.status) && (
-              { /* Warranty removed */ }
-            )}
+            {/* Warranty removed */}
 
             {isFreelancer && order.status === 'disputed' && (
               <Paper sx={{ p: 2, mb: 1, border: '2px solid', borderColor: 'warning.main' }}>
