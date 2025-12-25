@@ -23,6 +23,7 @@ import OrderDetail from '../pages/OrderDetail';
 import Orders from '../pages/Orders';
 import Portfolio from '../pages/Portfolio';
 import PricingHistory from '../pages/PricingHistory';
+import PricingTrends from '../pages/PricingTrends';
 import Profile from '../pages/Profile';
 import Register from '../pages/Register';
 import Seller from '../pages/Seller';
@@ -115,6 +116,7 @@ function AppContent() {
                     <Route path="/my-portfolio" element={requireAuth(<MyPortfolio />)} />
                     <Route path="/warranty/:orderId" element={requireAuth(<Warranty />)} />
                     <Route path="/pricing-history/:serviceId" element={requireAuth(<PricingHistory />)} />
+                    <Route path="/pricing-trends" element={requireAuth(<PricingTrends />)} />
                     <Route path="/service-versions/:serviceId" element={requireAuth(<ServiceVersions />)} />
                     <Route path="/withdrawals" element={requireAuth(<Withdrawals />)} />
                     <Route path="/logout" element={<Logout />} />

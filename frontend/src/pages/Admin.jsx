@@ -11,15 +11,25 @@ import PricingAnalytics from './PricingAnalytics';
 export default function Admin() {
     const { user } = useAuth();
     const [searchParams, setSearchParams] = useSearchParams();
-    const [activeTab, setActiveTab] = useState(0);
+    
+    const getTabIndex = (tabName) => {
+        switch(tabName) {
+            case 'freelancers': return 1;
+            case 'satisfaction': return 2;
+            case 'trends': return 3;
+            case 'pricing': return 4;
+            default: return 0;
+        }
+    };
+
+    const [activeTab, setActiveTab] = useState(() => getTabIndex(searchParams.get('tab')));
 
     useEffect(() => {
-        const tabParam = searchParams.get('tab');
-        if (tabParam === 'pricing') setActiveTab(4);
-        else if (tabParam === 'trends') setActiveTab(3);
-        else if (tabParam === 'satisfaction') setActiveTab(2);
-        else if (tabParam === 'freelancers') setActiveTab(1);
-        else if (tabParam === 'disputes') setActiveTab(0);
+        const tab = searchParams.get('tab');
+        console.log('Current tab param:', tab);
+        const index = getTabIndex(tab);
+        console.log('Setting active tab to:', index);
+        setActiveTab(index);
     }, [searchParams]);
 
     const handleTabChange = (event, newValue) => {
