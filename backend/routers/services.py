@@ -70,7 +70,7 @@ async def create_service(service: ServiceCreate, freelancer_id: int = Query(...)
                         (service_id, service.sample_work),
                     )
 
-                # 4. Optional add-ons
+                # 4. Optional add-ons (Linked Services)
                 if service.addon_service_ids:
                     for addon_id in service.addon_service_ids:
                         # Ensure addon exists and belongs to same freelancer
@@ -85,6 +85,23 @@ async def create_service(service: ServiceCreate, freelancer_id: int = Query(...)
                                 'INSERT INTO add_on (service_id1, service_id2) VALUES (%s, %s) ON CONFLICT DO NOTHING',
                                 (s1, s2),
                             )
+
+                # 5. Optional add-ons (New ServiceAddon items)
+                if service.addons:
+                    for addon in service.addons:
+                        await cur.execute(
+                            """
+                            INSERT INTO "ServiceAddon" (service_id, title, description, price, delivery_time_extension)
+                            VALUES (%s, %s, %s, %s, %s)
+                            """,
+                            (
+                                service_id,
+                                addon.title,
+                                addon.description,
+                                addon.price,
+                                addon.delivery_time_extension
+                            )
+                        )
 
                 await conn.commit()
 

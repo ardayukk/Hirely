@@ -131,12 +131,12 @@ async def place_order(order: OrderCreate, client_id: int = Query(...)):
                     for aid in order.addon_service_ids:
                         # ensure addon is a valid add-on for this service
                         await cur.execute(
-                            'SELECT 1 FROM "OrderAddon" WHERE order_id = %s AND addon_service_id = %s LIMIT 1',
-                            (order_id, aid),
+                            'SELECT 1 FROM "ServiceAddon" WHERE addon_id = %s AND service_id = %s',
+                            (aid, service_id),
                         )
-                        if not await cur.fetchone():
+                        if await cur.fetchone():
                             await cur.execute(
-                                'INSERT INTO "OrderAddon" (order_id, addon_service_id) VALUES (%s, %s)',
+                                'INSERT INTO "OrderAddon" (order_id, addon_id) VALUES (%s, %s)',
                                 (order_id, aid),
                             )
 
